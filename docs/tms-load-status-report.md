@@ -16,6 +16,10 @@ Anything else — including **`PENDING`**, **`BOOKED`**, missing/unknown status 
 
 Implementation: `isBookableLoad()` in `bridge/src/loads/tms-record.ts`.
 
+## Booking bug (fixed)
+
+Live **`LOAD_BOOK`** can return **`STATUS:PENDING`** with a valid **`BOOKING_REF`** (token hold). The bridge previously required **`BOOKED`** on the wire and then **`LOAD_UNAVAILABLE`** on reconcile. See [`tms-pending-booking-root-cause.md`](./tms-pending-booking-root-cause.md).
+
 ## Why LD00923 is **PENDING**
 
 Live **`LOAD_GET`** for **`LD00923`** (2026-10-11):

@@ -134,7 +134,7 @@ Returns full record including schedule, cargo, notes, pricing. **MAX_BUY** appea
 
 ## LOAD_BOOK
 
-Fields: `LOAD_ID`, `MC_NUM`, `AGREED_RATE`. Success includes `BOOKING_REF`, `STATUS:BOOKED`, UTC timestamp `YYYYMMDDHHMMSS`. Repeat → `ALREADY_BOOKED`; rate 0 → `INVALID_RATE`.
+Fields: `LOAD_ID`, `MC_NUM`, `AGREED_RATE`. Success includes `BOOKING_REF` and a timestamp `YYYYMMDDHHMMSS`. The handbook transcript shows `STATUS:BOOKED`; **live TMS often returns `STATUS:PENDING`** on the book wire while still issuing `BOOKING_REF` (token-scoped hold). Repeat → `ALREADY_BOOKED` (*by this token* when applicable); rate 0 → `INVALID_RATE`.
 
 ## DEBUG_ECHO
 

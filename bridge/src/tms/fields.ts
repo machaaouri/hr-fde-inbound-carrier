@@ -38,6 +38,8 @@ export type TmsFieldKey = (typeof TMS_FIELD)[keyof typeof TMS_FIELD];
 
 export const TMS_LOAD_STATUS = {
   OPEN: "OPEN",
+  /** Live TMS may return PENDING on LOAD_BOOK success before GET catches up. */
+  PENDING: "PENDING",
   BOOKED: "BOOKED",
 } as const;
 

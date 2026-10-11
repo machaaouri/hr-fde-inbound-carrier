@@ -253,6 +253,7 @@ export class FakeTmsServer {
     this.loads[idx] = updated;
 
     const ts = "20261011180000";
-    return `LOAD_ID:${loadId}|BOOKING_REF:${ref}|STATUS:BOOKED|TIMESTAMP:${ts}\r\nEND\r\n`;
+    // Match live TMS: success wire is PENDING + BOOKING_REF; GET shows BOOKED after book.
+    return `LOAD_ID:${loadId}|BOOKING_REF:${ref}|STATUS:PENDING|TIMESTAMP:${ts}\r\nEND\r\n`;
   }
 }

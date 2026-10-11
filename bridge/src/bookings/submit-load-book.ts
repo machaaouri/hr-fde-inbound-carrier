@@ -1,7 +1,7 @@
 import { BridgeError } from "../http/errors.ts";
 import type { TmsClient } from "../tms/client.ts";
 import { encodeLoadBook } from "../tms/commands.ts";
-import { TMS_FIELD } from "../tms/fields.ts";
+import { TMS_FIELD, TMS_LOAD_STATUS } from "../tms/fields.ts";
 import { bridgeErrorFromTmsWire } from "../tms/map-wire-error.ts";
 import { tmsTrim } from "../loads/tms-record.ts";
 
@@ -36,8 +36,17 @@ export async function submitLoadBookWire(
 
   const status = tmsTrim(record.get(TMS_FIELD.STATUS) ?? "");
   const ref = tmsTrim(record.get(TMS_FIELD.BOOKING_REF) ?? "");
-  if (status !== "BOOKED" || ref === "") {
-    throw new BridgeError("TMS_BAD_RESPONSE", "LOAD_BOOK missing BOOKING_REF or STATUS", 502, true);
+  if (ref === "") {
+    throw new BridgeError("TMS_BAD_RESPONSE", "LOAD_BOOK missing BOOKING_REF", 502, true);
+  }
+  // Handbook success is STATUS:BOOKED; live TMS often returns PENDING with a booking ref (token hold).
+  if (status !== TMS_LOAD_STATUS.BOOKED && status !== TMS_LOAD_STATUS.PENDING) {
+    throw new BridgeError(
+      "TMS_BAD_RESPONSE",
+      `LOAD_BOOK unexpected STATUS:${status}`,
+      502,
+      true,
+    );
   }
 
   return { kind: "booked", booking_ref: ref };

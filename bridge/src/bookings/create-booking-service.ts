@@ -85,14 +85,16 @@ async function reconcileBookingState(
     return { status: "NOT_BOOKED" };
   }
 
-  if (status !== TMS_LOAD_STATUS.BOOKED) {
-    return { status: "LOAD_UNAVAILABLE" };
-  }
-
   const ref = tmsTrim(record.get(TMS_FIELD.BOOKING_REF) ?? "");
-  if (ref === "") {
-    return { status: "LOAD_UNAVAILABLE" };
+  if (
+    status === TMS_LOAD_STATUS.BOOKED ||
+    (status === TMS_LOAD_STATUS.PENDING && ref !== "")
+  ) {
+    if (ref === "") {
+      return { status: "LOAD_UNAVAILABLE" };
+    }
+    return { status: "BOOKED_RECONCILED", booking_ref: ref };
   }
 
-  return { status: "BOOKED_RECONCILED", booking_ref: ref };
+  return { status: "LOAD_UNAVAILABLE" };
 }
