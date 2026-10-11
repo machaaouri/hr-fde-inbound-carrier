@@ -12,7 +12,9 @@ import {
   roundsRemainingFromUsed,
 } from "./decide-response.ts";
 import type { DecideWorkflowRequest, DecideWorkflowResponse } from "./decide-types.ts";
-import { fetchLoadPricing } from "./load-pricing.ts";
+import { isBookableLoad } from "../loads/tms-record.ts";
+import { fetchLoadRecord } from "../tms/fetch-load-record.ts";
+import { parseLoadPricingFromRecord } from "./load-pricing.ts";
 import { parseCarrierCounterRaw } from "./parse-carrier-counter.ts";
 import { standingOfferMatchesLastBrokerQuote } from "./standing-offer.ts";
 
@@ -37,11 +39,15 @@ async function fetchPricingForDecide(
   | { status: "unavailable" }
 > {
   try {
-    const snap = await fetchLoadPricing(client, tmsToken, loadId);
+    const record = await fetchLoadRecord(client, tmsToken, loadId);
+    if (!isBookableLoad(record)) {
+      return { status: "unavailable" };
+    }
+    const snap = parseLoadPricingFromRecord(record);
     return {
       status: "ok",
       pricing: { postedRate: snap.postedRate, maxBuy: snap.maxBuy },
-      loadAvailable: snap.loadAvailable,
+      loadAvailable: true,
     };
   } catch (err) {
     if (err instanceof BridgeError && err.code === "LOAD_NOT_FOUND") {

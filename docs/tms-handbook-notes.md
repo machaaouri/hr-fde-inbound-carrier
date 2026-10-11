@@ -39,7 +39,20 @@ Field values may be fixed-width, space-padded right. Widths: derive from transcr
 | --- | --- |
 | `LOAD_QUERY` | Search open board |
 | `LOAD_GET` | Full load record |
-| `LOAD_BOOK` | Commit booking |
+| `LOAD_BOOK` | Commit booking (success → `STATUS:BOOKED`) |
+
+### Load `STATUS` (bookability)
+
+Only **`OPEN`** loads are bookable. Filter with `isBookableLoad()` (`bridge/src/loads/tms-record.ts`).
+
+| STATUS | Bookable |
+| --- | --- |
+| `OPEN` | Yes |
+| `BOOKED` | No — already taken |
+| `PENDING` | No — held / in-flight (often after a book attempt); see [`tms-load-status-report.md`](./tms-load-status-report.md) |
+| Other | No |
+
+Search, offers/decide, and bookings all use this rule.
 | `DEBUG_ECHO` | Diagnostic; **bypasses fault injection** |
 
 Error codes seen in practice: `AUTH_FAILED`, `UNKNOWN_CMD`, `MISSING_FIELD`, `UNKNOWN_LOAD`, `ALREADY_BOOKED`, `INVALID_RATE`, `MALFORMED`, `SERVER_ERROR` (non-exhaustive).

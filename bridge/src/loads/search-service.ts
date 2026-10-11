@@ -4,8 +4,8 @@ import { unwrapTmsResponse } from "../tms/client.ts";
 import { mapTmsSearchRowToSafeLoad } from "./map-safe-load.ts";
 import type { SearchLoadsResponse } from "./safe-load-types.ts";
 import {
+  isBookableLoad,
   isFuturePickup,
-  isOpenStatus,
   matchesPickupDateFilter,
 } from "./tms-record.ts";
 import { toLoadQueryFilters } from "./to-tms-filters.ts";
@@ -37,7 +37,7 @@ export async function searchLoads(
     if (loads.length >= MAX_SAFE_LOADS) {
       break;
     }
-    if (!isOpenStatus(record)) {
+    if (!isBookableLoad(record)) {
       continue;
     }
     if (!isFuturePickup(record)) {

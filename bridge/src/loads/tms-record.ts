@@ -31,9 +31,18 @@ export function pickupDateKeyFromTms(value: string): string {
   return value.trim().slice(0, 8);
 }
 
-export function isOpenStatus(record: Map<string, string>): boolean {
+/**
+ * Handbook / PoC rule: only `OPEN` loads accept LOAD_BOOK and may be pitched.
+ * `BOOKED` is taken; `PENDING` is held (e.g. after a tentative book); other statuses are not offered.
+ */
+export function isBookableLoad(record: Map<string, string>): boolean {
   const status = record.get(TMS_FIELD.STATUS);
   return status !== undefined && tmsTrim(status) === TMS_LOAD_STATUS.OPEN;
+}
+
+/** @deprecated Use {@link isBookableLoad} — same rule (OPEN only). */
+export function isOpenStatus(record: Map<string, string>): boolean {
+  return isBookableLoad(record);
 }
 
 export function isFuturePickup(record: Map<string, string>, nowMs = Date.now()): boolean {

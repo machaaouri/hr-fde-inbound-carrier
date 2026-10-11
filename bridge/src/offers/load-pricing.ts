@@ -1,5 +1,5 @@
 import { BridgeError } from "../http/errors.ts";
-import { isOpenStatus } from "../loads/tms-record.ts";
+import { isBookableLoad } from "../loads/tms-record.ts";
 import { tmsPaddedInt } from "../loads/tms-record.ts";
 import type { TmsClient } from "../tms/client.ts";
 import { fetchLoadRecord } from "../tms/fetch-load-record.ts";
@@ -10,13 +10,11 @@ export type LoadPricingSnapshot = LoadPricing & {
   loadAvailable: boolean;
 };
 
-export async function fetchLoadPricing(
-  client: TmsClient,
-  tmsToken: string,
-  loadId: string,
-): Promise<LoadPricingSnapshot> {
-  const record = await fetchLoadRecord(client, tmsToken, loadId);
-  const loadAvailable = isOpenStatus(record);
+/** Parse RATE/MAX_BUY when the record is already loaded. Non-bookable → no pricing fields read. */
+export function parseLoadPricingFromRecord(record: Map<string, string>): LoadPricingSnapshot {
+  if (!isBookableLoad(record)) {
+    return { postedRate: 0, maxBuy: 0, loadAvailable: false };
+  }
 
   let postedRate: number;
   let maxBuy: number;
@@ -42,6 +40,15 @@ export async function fetchLoadPricing(
   return {
     postedRate,
     maxBuy,
-    loadAvailable,
+    loadAvailable: true,
   };
+}
+
+export async function fetchLoadPricing(
+  client: TmsClient,
+  tmsToken: string,
+  loadId: string,
+): Promise<LoadPricingSnapshot> {
+  const record = await fetchLoadRecord(client, tmsToken, loadId);
+  return parseLoadPricingFromRecord(record);
 }

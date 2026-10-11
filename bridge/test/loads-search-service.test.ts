@@ -48,8 +48,9 @@ describe("searchLoads", () => {
     const out = await searchLoads(client, TOKEN, {
       equipment_type: "DRY_VAN",
       origin_state: "AL",
+      dest_state: "MO",
     });
-    expect(out.loads).toHaveLength(0);
+    expect(out.loads.map((l) => l.id)).toEqual(["LD000009924"]);
   });
 
   it("returns empty list when QUERY matches nothing", async () => {
