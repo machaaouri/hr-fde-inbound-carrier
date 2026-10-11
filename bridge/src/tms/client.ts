@@ -47,6 +47,19 @@ export class TmsClient {
     });
   }
 
+  /** Single attempt — for LOAD_BOOK (no blind retry). */
+  async executeWrite(requestLine: string, label: string): Promise<ParsedTmsResponse> {
+    try {
+      const lines = await this.requestOnce(requestLine, label);
+      return parseTmsResponse(lines);
+    } catch (err) {
+      if (err instanceof BridgeError) {
+        throw err;
+      }
+      throw toTmsUnavailable(err);
+    }
+  }
+
   async executeRead(requestLine: string, label: string): Promise<ParsedTmsResponse> {
     let lastErr: unknown;
     for (let attempt = 1; attempt <= this.readMaxAttempts; attempt++) {

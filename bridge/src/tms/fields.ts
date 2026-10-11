@@ -30,6 +30,8 @@ export const TMS_FIELD = {
   MAX_RESULTS: "MAX_RESULTS",
   MC_NUM: "MC_NUM",
   AGREED_RATE: "AGREED_RATE",
+  BOOKING_REF: "BOOKING_REF",
+  TIMESTAMP: "TIMESTAMP",
 } as const;
 
 export type TmsFieldKey = (typeof TMS_FIELD)[keyof typeof TMS_FIELD];

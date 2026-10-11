@@ -161,33 +161,23 @@ paths:
               $ref: "#/components/schemas/CreateBookingRequest"
       responses:
         "200":
-          description: Booking outcome
+          description: Booking workflow envelope (business outcomes on agent.status)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CreateBookingResponse"
+                $ref: "#/components/schemas/BookingWorkflowResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
-        "404":
-          description: Load not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "409":
-          description: Load unavailable
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
         "422":
-          description: Validation or rate not acceptable
+          $ref: "#/components/responses/ValidationError"
+        "502":
+          description: TMS bad response
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
-        "503":
-          description: Ceiling or TMS unavailable
+        "504":
+          description: TMS timeout
           content:
             application/json:
               schema:
@@ -558,29 +548,56 @@ components:
 
     CreateBookingRequest:
       type: object
-      required: [load_id, mc_number, agreed_rate, run_id]
+      required: [load_id, mc_number, agreed_rate, run_id, otp_status, outcome]
       properties:
         load_id:
           type: string
         mc_number:
           type: string
         agreed_rate:
-          type: integer
+          oneOf:
+            - type: integer
+            - type: string
         run_id:
           type: string
-
-    BookingStatus:
-      type: string
-      enum: [BOOKED, BOOKED_RECONCILED, NOT_BOOKED, LOAD_UNAVAILABLE]
-
-    CreateBookingResponse:
-      type: object
-      required: [status]
-      properties:
-        status:
-          $ref: "#/components/schemas/BookingStatus"
-        booking_ref:
+        otp_status:
           type: string
+          description: Twin calls.otp_status (must be passed for TMS book)
+        outcome:
+          type: string
+          description: Twin calls.outcome (must be agreed for TMS book)
+
+    AgentBookingStatus:
+      type: string
+      enum:
+        - NOT_READY
+        - RATE_NOT_ACCEPTABLE
+        - LOAD_UNAVAILABLE
+        - NOT_BOOKED
+        - BOOKED
+        - BOOKED_RECONCILED
+
+    BookingWorkflowResponse:
+      type: object
+      required: [agent, calls]
+      properties:
+        agent:
+          type: object
+          required: [status, booking_ref]
+          properties:
+            status:
+              $ref: "#/components/schemas/AgentBookingStatus"
+            booking_ref:
+              type: ["string", "null"]
+        calls:
+          type: object
+          required: [booking_ref, outcome]
+          properties:
+            booking_ref:
+              type: ["string", "null"]
+            outcome:
+              type: string
+              description: booked on success; otherwise unchanged from request
 
     SendOtpRequest:
       type: object

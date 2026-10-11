@@ -19,10 +19,17 @@ export type FakeTmsServerOptions = {
   loads?: FakeLoadRecord[];
 };
 
+type FakeBooking = {
+  mc: string;
+  rate: string;
+  ref: string;
+};
+
 export class FakeTmsServer {
   private readonly token: string;
   private loads: FakeLoadRecord[];
   private fault: FakeTmsFault | null = null;
+  private readonly bookings = new Map<string, FakeBooking>();
 
   constructor(options: FakeTmsServerOptions = {}) {
     this.token = options.token ?? "t-test-fake";
@@ -132,7 +139,7 @@ export class FakeTmsServer {
         body = this.handleLoadGet(req.fields);
         break;
       case "LOAD_BOOK":
-        body = "ERR|CODE:SERVER_ERROR|MSG:LOAD_BOOK not implemented on fake TMS\r\n";
+        body = this.handleLoadBook(req.fields);
         break;
       default:
         body = "ERR|CODE:UNKNOWN_CMD|MSG:unknown command\r\n";
@@ -199,6 +206,53 @@ export class FakeTmsServer {
     if (!record) {
       return "ERR|CODE:UNKNOWN_LOAD|MSG:load not found";
     }
-    return `${toFullLine(record)}\r\nEND\r\n`;
+    const line = this.withBookingRefOnGet(record, loadId);
+    return `${line}\r\nEND\r\n`;
+  }
+
+  private withBookingRefOnGet(record: FakeLoadRecord, loadId: string): string {
+    const booking = this.bookings.get(loadId);
+    if (!booking) {
+      return toFullLine(record);
+    }
+    const copy = new Map(record);
+    copy.set(TMS_FIELD.STATUS, "BOOKED  ");
+    return `${toFullLine(copy)}|BOOKING_REF:${booking.ref}`;
+  }
+
+  private handleLoadBook(fields: Map<string, string>): string {
+    const loadId = fields.get(TMS_FIELD.LOAD_ID)?.trim();
+    const mc = fields.get(TMS_FIELD.MC_NUM)?.trim();
+    const rateRaw = fields.get(TMS_FIELD.AGREED_RATE)?.trim();
+    if (!loadId || !mc || rateRaw === undefined) {
+      return "ERR|CODE:MISSING_FIELD|MSG:LOAD_ID, MC_NUM, and AGREED_RATE required";
+    }
+
+    const rateNum = Number.parseInt(rateRaw, 10);
+    if (!Number.isFinite(rateNum) || rateNum <= 0) {
+      return "ERR|CODE:INVALID_RATE|MSG:rate must be positive";
+    }
+
+    const idx = this.loads.findIndex(
+      (r) => r.get(TMS_FIELD.LOAD_ID)?.trim() === loadId,
+    );
+    if (idx === -1) {
+      return "ERR|CODE:UNKNOWN_LOAD|MSG:load not found";
+    }
+
+    const record = this.loads[idx]!;
+    const status = record.get(TMS_FIELD.STATUS)?.trim();
+    if (this.bookings.has(loadId) || status === "BOOKED") {
+      return "ERR|CODE:ALREADY_BOOKED|MSG:load already booked";
+    }
+
+    const ref = `BR-${loadId}`;
+    this.bookings.set(loadId, { mc, rate: rateRaw, ref });
+    const updated = new Map(record);
+    updated.set(TMS_FIELD.STATUS, "BOOKED  ");
+    this.loads[idx] = updated;
+
+    const ts = "20261011180000";
+    return `LOAD_ID:${loadId}|BOOKING_REF:${ref}|STATUS:BOOKED|TIMESTAMP:${ts}\r\nEND\r\n`;
   }
 }

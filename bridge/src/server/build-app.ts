@@ -5,12 +5,9 @@ import type { BridgeConfig } from "../config/types.ts";
 import { BridgeError, toErrorEnvelope, unauthorizedError } from "../http/errors.ts";
 import { createRequestContext } from "../http/request-context.ts";
 import { parseSearchLoadsInput } from "../loads/parse-search-body.ts";
-import {
-  createBookingBody,
-  sendOtpBody,
-  verifyCarrierBody,
-  verifyOtpBody,
-} from "../http/schemas.ts";
+import { sendOtpBody, verifyCarrierBody, verifyOtpBody } from "../http/schemas.ts";
+import { bookingForWorkflow } from "../bookings/booking-workflow-service.ts";
+import { parseBookingWorkflowInput } from "../bookings/parse-booking-body.ts";
 import { decideOfferForWorkflow } from "../offers/decide-service.ts";
 import {
   decideLogRound,
@@ -20,7 +17,6 @@ import { parseCarrierCounterRaw } from "../offers/parse-carrier-counter.ts";
 import { verifyCarrierByMc } from "../carriers/verify-service.ts";
 import { FmcsaClient } from "../fmcsa/client.ts";
 import type { VerifyCarrierResult } from "../fmcsa/types.ts";
-import { stubBooking } from "../stubs/responses.ts";
 import { searchLoads } from "../loads/search-service.ts";
 import { TmsClient } from "../tms/client.ts";
 import { handleSendOtp, handleVerifyOtp } from "../http/otp-handlers.ts";
@@ -148,8 +144,17 @@ export async function buildApp(
 
   app.post("/v1/bookings", async (req) => {
     requireAuth(req.headers.authorization);
-    createBookingBody.parse(req.body);
-    return stubBooking();
+    const body = parseBookingWorkflowInput(req.body);
+    const result = await bookingForWorkflow(tms, config, body);
+    req.log.info(
+      {
+        request_id: req.ctx?.requestId,
+        load_id: body.load_id,
+        status: result.agent.status,
+      },
+      "bookings/create",
+    );
+    return result;
   });
 
   app.post("/v1/otp/send", async (req) => {

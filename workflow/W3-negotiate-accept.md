@@ -1,39 +1,19 @@
-# W3 — `negotiate`, `accept_offer` (live `/v1/offers/decide`)
+# W3 — Negotiate, accept, book (workflow-owned bridge)
 
-**Status:** Built and E2E-tested in HappyRobot development (e.g. deal at **$750**, **failed_negotiation** after 3 counter rounds).
+**Prerequisites:** W2 complete (`otp_status` = `passed`, `search_loads` done). `@BRIDGE_BASE_URL`, `@BRIDGE_API_KEY` (Cloud Run or `make run` + `make tunnel`). Live **`POST /v1/offers/decide`** and **`POST /v1/bookings`**.
 
-**Prerequisites:** W2 complete (`otp_status` = `passed`, `search_loads` done). `make run` + `make tunnel`; `@BRIDGE_BASE_URL`, `@BRIDGE_API_KEY`. Booking (`book_load`) stays stub until step 6.
-
-Bridge reference: [`docs/offers-decide-workflow.md`](../docs/offers-decide-workflow.md), pricing rules [`docs/negotiation-pricing.md`](../docs/negotiation-pricing.md).
+Negotiation rules live in the bridge; the workflow sends Twin state and maps **`response.agent`** / **`response.calls`** only.
 
 ---
 
-## Design rule
+## 1. Agent prompt (booking)
 
-**No Conditions, Paths, or negotiation logic in the workflow.** The bridge is stateless and owns all rules (opening = loadboard rate, counter cleaning, round cap, ceiling, decisions). The workflow only:
+Add to the agent instructions after accept:
 
-1. **Read Twin** `calls` for `@current.run_id`
-2. **POST** `/v1/offers/decide` with Twin fields + `action` + raw `carrier_counter`
-3. **Upsert Twin** `calls` from `response.calls`
-4. **Insert Twin** `offers` from `response.offer` (**Continue on failure** enabled — `offer` is often `null`)
-
-Repeat that **four-step pattern** for each tool invocation.
-
----
-
-## 1. Prompt add-on (after W2 search)
-
-```text
-6. After the caller picks a load, call negotiate with no carrier counter to get the opening broker_offer. The opening should match the loadboard rate you already pitched from search. Quote broker_offer only — never mention a maximum or internal cap.
-7. If the caller counters, call negotiate and pass their rate as carrier_counter (speech is fine; the bridge normalizes dollars). Use decision, broker_offer, agreed_rate, and rounds_remaining from the tool:
-   - OPENING or COUNTER: state broker_offer; ask to accept or counter again.
-   - ACCEPT: confirm agreed_rate; stop negotiating.
-   - INVALID_COUNTER: explain the number was not usable; you may still have rounds_remaining.
-   - FINAL_REJECT: close professionally; no handoff for failed negotiation.
-   - NOT_VERIFIED: verification required — do not negotiate.
-   - LOAD_UNAVAILABLE: load no longer available — offer to search again or end the call.
-8. If the caller accepts your last broker_offer as stated, call accept_offer (no carrier_counter). Do not treat accept as a counter round.
-9. Do not call book_load until that tool exists in the workflow.
+```
+7. After accept_offer succeeds, call book_load to tentatively book the load.
+8. If book_load agent status is BOOKED or BOOKED_RECONCILED, confirm the booking reference and mock handoff to a senior rep.
+9. If status is NOT_READY, RATE_NOT_ACCEPTABLE, LOAD_UNAVAILABLE, or NOT_BOOKED, explain briefly and do not claim the load is booked.
 ```
 
 ---
@@ -112,7 +92,7 @@ Do not expose `broker_offer`, `rounds_remaining`, or other fields for this tool 
 
 ---
 
-## 4. HTTP errors vs business decisions
+## 4. HTTP errors vs business decisions (decide)
 
 | Situation | Workflow behavior |
 | --- | --- |
@@ -125,15 +105,63 @@ Do **not** branch on 404/409 for load state on decide — those are not used for
 
 ---
 
-## 5. Verified E2E scenarios
+## 5. Tool: `book_load`
+
+**Webhook:** `POST` `@BRIDGE_BASE_URL` + `/v1/bookings`
+
+### Four steps
+
+| Step | Node | Detail |
+| --- | --- | --- |
+| 1 | **Read Twin** | `calls` for `@current.run_id` |
+| 2 | **Webhook** | Body below |
+| 3 | **Write Twin** | Upsert `calls` from **`response.calls`** (`booking_ref`, `outcome`) |
+| 4 | **Tool result** | Map **`response.agent`** only |
+
+### Webhook JSON body
+
+| Field | Source |
+| --- | --- |
+| `load_id` | Twin `calls.current_load_id` |
+| `mc_number` | Twin `calls.mc_number` |
+| `agreed_rate` | Twin `calls.agreed_rate` |
+| `run_id` | `@current.run_id` |
+| `otp_status` | Twin `calls.otp_status` |
+| `outcome` | Twin `calls.outcome` |
+
+### Tool Call Result (agent-visible only)
+
+| Field | Expose |
+| --- | --- |
+| `status` | yes |
+| `booking_ref` | yes |
+
+### Business outcomes (always HTTP 200)
+
+| `agent.status` | Agent behavior |
+| --- | --- |
+| `BOOKED` / `BOOKED_RECONCILED` | Confirm ref; mock handoff |
+| `NOT_READY` | Gates failed — do not book |
+| `RATE_NOT_ACCEPTABLE` | Rate issue — do not book |
+| `LOAD_UNAVAILABLE` | Load gone — offer search or end |
+| `NOT_BOOKED` | Uncertain — do not claim booked |
+
+**Do not branch on HTTP status** for the rows above. Only **502/504** are failed webhooks (retry; do not write Twin as booked).
+
+Detail: [`docs/bookings-workflow.md`](../docs/bookings-workflow.md).
+
+---
+
+## 6. Verified E2E scenarios
 
 1. **Search → pick load → negotiate** (empty counter) → opening equals loadboard rate from search (e.g. **LD00923** at **$821**).
 2. **Counter loop** until **ACCEPT** at agreed rate (live verified e.g. **$750**).
 3. **Three counters** with no deal → `FINAL_REJECT`, Twin `outcome` = `failed_negotiation`.
 4. **`accept_offer`** after caller accepts last **broker_offer** → `decision` **ACCEPT**, `agreed_rate` set on `calls`.
+5. **`book_load`** after accept → `agent.status` **BOOKED**, Twin `outcome` **booked**, `booking_ref` set.
 
 ---
 
-## 6. Export
+## 7. Export
 
 Export stable workflow JSON to `workflow/exports/` before step 7 publish.

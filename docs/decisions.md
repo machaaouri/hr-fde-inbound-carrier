@@ -11,7 +11,7 @@ This document records implementer decisions for the inbound carrier sales PoC. S
   - `POST /v1/carriers/verify` — `{ mc_number }` → `{ eligible, carrier_name?, dot_number?, reason, contact_email? }`. `contact_email` only when FMCSA returns one; workflow hides it from the agent.
   - `POST /v1/loads/search` — lane/equipment filters → up to 3 loads with **safe fields only** (includes **`loadboard_rate`** from TMS `RATE`; never ceiling / `MAX_BUY`).
   - `POST /v1/offers/decide` — workflow-owned negotiation: Twin `calls` in, `{ agent, calls, offer }` out; never exposes `MAX_BUY`. See [`offers-decide-workflow.md`](./offers-decide-workflow.md).
-  - `POST /v1/bookings` — `{ load_id, mc_number, agreed_rate, run_id }` with ceiling re-check before book.
+  - `POST /v1/bookings` — Twin gates + book: `{ load_id, mc_number, agreed_rate, run_id, otp_status, outcome }` → `{ agent, calls }` on **200** (see [`bookings-workflow.md`](./bookings-workflow.md)).
 - **Errors:** envelope `{ error: { code, message, retryable, request_id } }`. Codes: `UNAUTHORIZED`, `VALIDATION_ERROR`, `RATE_LIMITED`, `LOAD_NOT_FOUND`, `LOAD_UNAVAILABLE`, `RATE_NOT_ACCEPTABLE`, `CEILING_UNAVAILABLE`, `TMS_UNAVAILABLE`, `TMS_BAD_RESPONSE`, `FMCSA_UNAVAILABLE`, `FMCSA_MISCONFIGURED`, `INTERNAL`. TMS codes are mapped, never passed through.
 - **Contract:** frozen in `bridge/openapi.yaml` (step 1). Contract tests enforce it (step 6).
 

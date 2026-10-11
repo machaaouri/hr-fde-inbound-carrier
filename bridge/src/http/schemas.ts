@@ -4,13 +4,6 @@ export const verifyCarrierBody = z.object({
   mc_number: z.string().min(1),
 });
 
-export const createBookingBody = z.object({
-  load_id: z.string().min(1),
-  mc_number: z.string().min(1),
-  agreed_rate: z.number().int().positive(),
-  run_id: z.string().min(1),
-});
-
 export const sendOtpBody = z.object({
   run_id: z.string().min(1),
   mc_number: z.string().min(1),

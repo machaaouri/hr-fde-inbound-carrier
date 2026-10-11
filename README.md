@@ -26,7 +26,7 @@ Requirements: `PROBLEM_BRIEF.md`. Architecture decisions: `docs/decisions.md`. T
 
 Twin tables: run `docs/twin/schema.sql`, `views.sql`, then edit/run `seed.sql` in the HappyRobot Twin SQL console (`docs/twin/README.md`).
 
-**Workflow specs:** `workflow/README.md` (W1–W3). Live bridge: verify, search, OTP, offers/decide; stub: bookings. FMCSA: [`docs/fmcsa-integration.md`](docs/fmcsa-integration.md).
+**Workflow specs:** `workflow/README.md` (W1–W3). Bookings envelope: [`docs/bookings-workflow.md`](docs/bookings-workflow.md). FMCSA: [`docs/fmcsa-integration.md`](docs/fmcsa-integration.md).
 
 **Local bridge:** `make run` + `make tunnel` in another terminal.
 

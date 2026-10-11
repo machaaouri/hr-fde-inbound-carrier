@@ -38,8 +38,8 @@ async function main(): Promise<void> {
         "otp/send",
         "otp/verify",
         "offers/decide",
+        "bookings",
       ],
-      stub: ["bookings"],
     },
     "bridge listening",
   );
