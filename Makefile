@@ -1,4 +1,4 @@
-.PHONY: install lint typecheck test docker-build probe-tms probe-fmcsa dev run tunnel
+.PHONY: install lint typecheck test docker-build probe-tms probe-fmcsa dev run tunnel deploy
 
 install:
 	cd bridge && npm install
@@ -30,6 +30,5 @@ run:
 tunnel:
 	ngrok http --url=$$(grep '^NGROK_DOMAIN=' .env | cut -d= -f2-) 8080
 
-# Step 7: gcloud run deploy --source bridge
 deploy:
-	@echo "Cloud Run deploy is implemented in step 7."
+	./scripts/deploy-cloud-run.sh
