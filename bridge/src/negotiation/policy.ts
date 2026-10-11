@@ -1,8 +1,8 @@
-import { floor25 } from "./money.ts";
+import { counterStepSize, floor25, roundDownToStep } from "./money.ts";
 import type { DecideOfferInput, DecideOfferResult, LoadPricing } from "./types.ts";
 
-/** Fraction of gap (previous → target) broker moves each counter round. */
-const MEET_FRACTIONS = [0.4, 0.65, 0.85] as const;
+/** Fraction of gap (previous → target) broker moves each counter round (~half on round 1). */
+const MEET_FRACTIONS = [0.5, 0.65, 0.75] as const;
 
 /** Keep published counters below max_rate so probing cannot infer the ceiling. */
 const CONCEAL_BELOW_MAX = [50, 40, 30] as const;
@@ -21,6 +21,18 @@ export function computeOpeningOffer(pricing: LoadPricing): number {
   return loadboard;
 }
 
+/** Accept carrier counter when within max($50, 3% of last broker quote). */
+export function closeGapAcceptThreshold(brokerOffer: number): number {
+  return Math.max(50, Math.floor(brokerOffer * 0.03));
+}
+
+export function isWithinCloseGap(brokerOffer: number, carrierCounter: number): boolean {
+  if (carrierCounter <= brokerOffer) {
+    return true;
+  }
+  return carrierCounter - brokerOffer <= closeGapAcceptThreshold(brokerOffer);
+}
+
 function softBrokerCap(maxRate: number, round: number): number {
   const idx = Math.min(Math.max(round - 1, 0), 2);
   const margin = CONCEAL_BELOW_MAX[idx] ?? 30;
@@ -32,8 +44,8 @@ function softBrokerCap(maxRate: number, round: number): number {
 }
 
 /**
- * Next broker counter: strictly above `previous` when carrier asks above it,
- * never above `maxRate` or the carrier's counter.
+ * Next broker counter: a meaningful step toward the carrier,
+ * never above `maxRate` or the carrier's counter, never below `previous`.
  */
 export function nextBrokerCounterOffer(
   previous: number,
@@ -45,29 +57,29 @@ export function nextBrokerCounterOffer(
     return previous;
   }
 
+  const step = counterStepSize(previous);
   const softCap = softBrokerCap(maxRate, round);
-  let target = Math.min(carrierCounter, softCap);
-  if (target <= previous) {
-    target = maxRate;
-  }
+  const target = Math.min(carrierCounter, softCap, maxRate);
+  const gap = Math.max(0, target - previous);
 
-  const fraction = MEET_FRACTIONS[Math.min(round - 1, 2)] ?? 0.85;
-  let offer = floor25(previous + (target - previous) * fraction);
+  const fraction = MEET_FRACTIONS[Math.min(round - 1, 2)] ?? 0.75;
+  let offer = roundDownToStep(previous + gap * fraction, step);
 
   if (offer <= previous) {
-    offer = floor25(Math.min(previous + 25, maxRate));
+    offer = previous + step;
   }
+
   if (offer > carrierCounter) {
     offer = carrierCounter;
   }
   if (offer > maxRate) {
-    offer = floor25(maxRate);
+    offer = roundDownToStep(maxRate, step);
   }
   if (offer >= maxRate) {
-    offer = softBrokerCap(maxRate, round);
+    offer = roundDownToStep(softCap, step);
   }
   if (offer <= previous) {
-    offer = floor25(Math.min(maxRate, previous + 25));
+    offer = Math.min(previous + step, carrierCounter, softCap, maxRate);
   }
   return offer;
 }
@@ -126,6 +138,14 @@ export function decideOffer(input: DecideOfferInput): DecideOfferResult {
     input.previousBrokerOffer ?? computeOpeningOffer(pricing);
 
   if (counter <= previous) {
+    return {
+      decision: "ACCEPT",
+      agreed_rate: counter,
+      rounds_remaining: roundsRemaining(round),
+    };
+  }
+
+  if (counter <= maxRate && isWithinCloseGap(previous, counter)) {
     return {
       decision: "ACCEPT",
       agreed_rate: counter,

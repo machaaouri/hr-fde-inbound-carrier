@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { floor25 } from "../src/negotiation/money.ts";
+import { counterStepSize, floor25, roundDownToStep } from "../src/negotiation/money.ts";
 import {
+  closeGapAcceptThreshold,
   computeOpeningOffer,
   decideOffer,
   isLoadboardAboveMax,
+  isWithinCloseGap,
   nextBrokerCounterOffer,
 } from "../src/negotiation/policy.ts";
 
@@ -134,5 +136,61 @@ describe("responses never embed ceiling", () => {
 describe("floor25", () => {
   it("rounds down to $25", () => {
     expect(floor25(852)).toBe(850);
+  });
+});
+
+describe("close gap accept (posted $1,524 / counter $1,550)", () => {
+  const GREENSBORO = { postedRate: 1524, maxBuy: 1700 };
+
+  it("threshold is max($50, 3%)", () => {
+    expect(closeGapAcceptThreshold(1524)).toBe(50);
+    expect(isWithinCloseGap(1524, 1550)).toBe(true);
+    expect(isWithinCloseGap(1524, 1575)).toBe(false);
+  });
+
+  it("accepts $1,550 instead of a $1-style broker counter", () => {
+    const out = decideOffer({
+      round: 1,
+      pricing: GREENSBORO,
+      carrierCounter: 1550,
+      previousBrokerOffer: 1524,
+      loadAvailable: true,
+    });
+    expect(out.decision).toBe("ACCEPT");
+    expect(out.agreed_rate).toBe(1550);
+  });
+
+  it("counters with a clean step well above $1,525 when gap is larger", () => {
+    const out = decideOffer({
+      round: 1,
+      pricing: { postedRate: 1524, maxBuy: 1800 },
+      carrierCounter: 1700,
+      previousBrokerOffer: 1524,
+      loadAvailable: true,
+    });
+    expect(out.decision).toBe("COUNTER");
+    expect(out.broker_offer).toBe(1600);
+    expect(out.broker_offer).toBeGreaterThan(1550);
+  });
+});
+
+describe("step sizes and rounding", () => {
+  it("uses $25 steps at or above $1,000 last quote", () => {
+    expect(counterStepSize(1524)).toBe(25);
+    expect(roundDownToStep(1612, 25)).toBe(1600);
+  });
+
+  it("uses $5 steps below $1,000 last quote", () => {
+    expect(counterStepSize(821)).toBe(5);
+    expect(nextBrokerCounterOffer(821, 900, 950, 1)).toBe(860);
+  });
+});
+
+describe("ceiling concealment", () => {
+  it("never publishes max_rate on counter offers", () => {
+    for (let round = 1; round <= 3; round++) {
+      const offer = nextBrokerCounterOffer(1524, 5000, 1700, round);
+      expect(offer).toBeLessThan(1700);
+    }
   });
 });

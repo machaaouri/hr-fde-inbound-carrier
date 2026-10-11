@@ -1,14 +1,22 @@
 # Negotiation pricing (POST /v1/offers/decide)
 
-Authoritative summary for **D2** (`docs/decisions.md`). Replaces the old “88% opening” schedule. Aligns broker speech with **loadboard_rate** the carrier already heard from search.
+Authoritative summary for **D2** (`docs/decisions.md`). Aligns broker speech with **loadboard_rate** the carrier already heard from search.
 
 ## Rules (`bridge/src/negotiation/policy.ts`)
 
 1. **Opening** = TMS posted **RATE** (loadboard_rate). If `RATE > MAX_BUY`, open at **max_rate** (`MAX_BUY`) and log a warning (`loadboard_rate exceeds max_rate; opening clamped to max_rate`).
 2. **Counter ≤ last broker quote** → **ACCEPT** at the carrier’s number.
-3. **Counter above last quote** → broker moves partway toward the carrier using round fractions `[0.4, 0.65, 0.85]`, floored to **$25**, capped below **max_rate** by a round-specific margin (`50 / 40 / 30` USD) so responses do not sit on max_rate every time.
-4. Every broker counter is **≥ previous quote**, **≤ max_rate**, and **≤ carrier counter**.
-5. If the carrier is still above the broker after **round 3** → **FINAL_REJECT**.
-6. **max_rate** is used only inside the bridge; HTTP JSON never includes `MAX_BUY` / ceiling fields.
+3. **Close gap** — if the carrier’s counter is above the last broker quote but within **max($50, 3% of that quote)** and **≤ max_rate**, **ACCEPT** at the carrier’s number (avoids silly $1 counters when the carrier is already near the posted rate).
+4. **Counter farther above** — broker moves **~half the gap** toward the carrier (round fractions **0.5 → 0.65 → 0.75** on rounds 1–3), rounded down to a clean step: **$25** when the last quote is **≥ $1,000**, else **$5**. Each counter is at least one full step above the previous quote when possible.
+5. Published counters stay **≥ previous quote**, **≤ max_rate**, **≤ carrier counter**, and **below max_rate** by a round-specific margin (**$50 / $40 / $30**) so repeated counters do not reveal the ceiling.
+6. If the broker meets or exceeds the carrier after rounding and the carrier is **≤ max_rate** → **ACCEPT** at the carrier’s number.
+7. If still apart after **round 3** → **FINAL_REJECT**.
+8. **max_rate** is used only inside the bridge; HTTP JSON never includes `MAX_BUY` / ceiling fields.
+
+### Example (live-style)
+
+Posted **$1,524**, carrier counters **$1,550** (gap **$26**). Threshold **max($50, 3%) = $50** → **ACCEPT $1,550**.
+
+Posted **$1,524**, carrier **$1,700**, max_rate **$1,800** → broker counter **$1,600** (half gap, $25 step), not **$1,525**.
 
 Twin **`standing_offer`** is the previous broker quote fed into `previousBrokerOffer` on counter rounds.
