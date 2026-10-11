@@ -42,8 +42,8 @@ describe("bridge HTTP", () => {
     await closeFake();
   });
 
-  it("GET /healthz is open", async () => {
-    const res = await app.inject({ method: "GET", url: "/healthz" });
+  it("GET /health is open", async () => {
+    const res = await app.inject({ method: "GET", url: "/health" });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ status: "ok" });
   });

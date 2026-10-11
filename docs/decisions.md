@@ -4,7 +4,7 @@ This document records implementer decisions for the inbound carrier sales PoC. S
 
 ## D1. Bridge API
 
-- **Base path:** `/v1` on HTTPS. **Auth:** `Authorization: Bearer <BRIDGE_API_KEY>` on every route except `GET /healthz`.
+- **Base path:** `/v1` on HTTPS. **Auth:** `Authorization: Bearer <BRIDGE_API_KEY>` on every route except `GET /health`.
 - **Correlation:** optional header `X-HR-Run-Id` (workflow insert `@current.run_id`); logged with request ID, never returned to the agent except via workflow state.
 - **Workflow wiring:** URL = `@BRIDGE_BASE_URL` + path; webhook **Bearer Token** = `@BRIDGE_API_KEY` (see `docs/happyrobot-platform-notes.md` Q3).
 - **Routes:**

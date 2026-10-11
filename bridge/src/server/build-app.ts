@@ -104,7 +104,7 @@ export async function buildApp(
     }
   }
 
-  app.get("/healthz", async () => ({ status: "ok" as const }));
+  app.get("/health", async () => ({ status: "ok" as const }));
 
   app.post("/v1/carriers/verify", async (req) => {
     requireAuth(req.headers.authorization);

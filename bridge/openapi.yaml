@@ -8,7 +8,7 @@ info:
 
     Behavior is stubbed on HTTP routes until each build step wires real handlers.
 
-    Auth: Bearer token on all routes except `/healthz`.
+    Auth: Bearer token on all routes except `/health`.
     Correlation: optional `X-HR-Run-Id` header (logged, not echoed in responses).
 
 servers:
@@ -24,11 +24,11 @@ tags:
   - name: otp
 
 paths:
-  /healthz:
+  /health:
     get:
       tags: [health]
       summary: Liveness probe (no auth)
-      operationId: healthz
+      operationId: health
       security: []
       responses:
         "200":

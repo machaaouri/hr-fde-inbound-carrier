@@ -69,7 +69,7 @@ describe("TMS error handling (process survives)", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().agent.decision).toBe("LOAD_UNAVAILABLE");
 
-    const health = await app.inject({ method: "GET", url: "/healthz" });
+    const health = await app.inject({ method: "GET", url: "/health" });
     expect(health.statusCode).toBe(200);
   });
 
@@ -85,7 +85,7 @@ describe("TMS error handling (process survives)", () => {
     expect(res.statusCode).toBe(504);
     expect(res.json().error.retryable).toBe(true);
 
-    const health = await app.inject({ method: "GET", url: "/healthz" });
+    const health = await app.inject({ method: "GET", url: "/health" });
     expect(health.statusCode).toBe(200);
   });
 

@@ -31,6 +31,6 @@ Twin tables: run `docs/twin/schema.sql`, `views.sql`, then edit/run `seed.sql` i
 **Local bridge:** `make run` + `make tunnel` in another terminal.
 
 ```bash
-make run      # terminal 1 — http://localhost:8080/healthz
+make run      # terminal 1 — http://localhost:8080/health
 make tunnel   # terminal 2 — public https://$NGROK_DOMAIN
 ```
