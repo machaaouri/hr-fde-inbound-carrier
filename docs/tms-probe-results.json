@@ -1,0 +1,46 @@
+{
+  "echo_ok": true,
+  "open_loads_sampled": 27,
+  "equipment_types": [
+    "DRY_VAN",
+    "FLATBED",
+    "REEFER"
+  ],
+  "lane_pairs": [
+    "AL->MO",
+    "AZ->CA",
+    "CA->IA",
+    "CA->TX",
+    "CT->FL",
+    "FL->KS",
+    "FL->OH",
+    "FL->TN",
+    "GA->NE",
+    "HI->IA",
+    "MI->AZ",
+    "MN->MO",
+    "MT->ID",
+    "NY->CT",
+    "OH->NY",
+    "OK->MN",
+    "OR->FL",
+    "OR->MN",
+    "SC->AK",
+    "SC->NV",
+    "SD->CT",
+    "TX->IA",
+    "TX->TN",
+    "VA->AL",
+    "WA->ND",
+    "WY->GA"
+  ],
+  "suggested_matching_lane": "AL->MO",
+  "suggested_no_match": "Boise ORIG_CITY + DEST_STATE:VT + EQTYPE:REEFER returns empty per handbook",
+  "sample_load_get": {
+    "load_id": "LD00880",
+    "status": "OPEN",
+    "posted_rate_field": "3241",
+    "max_buy_field_present": true
+  },
+  "note": "Token receives MAX_BUY on LOAD_GET — ceiling enforcement can proceed."
+}

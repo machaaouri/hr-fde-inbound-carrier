@@ -1,0 +1,682 @@
+openapi: 3.0.3
+info:
+  title: Inbound Carrier Bridge API
+  version: 0.2.0
+  description: |
+    Stateless integration layer for HappyRobot inbound carrier sales.
+    v0.2 adds OTP routes (bridge crypto; Twin writes stay in the workflow).
+
+    Behavior is stubbed on HTTP routes until each build step wires real handlers.
+
+    Auth: Bearer token on all routes except `/healthz`.
+    Correlation: optional `X-HR-Run-Id` header (logged, not echoed in responses).
+
+servers:
+  - url: https://example.invalid
+    description: Replace with ngrok (dev) or Cloud Run (prod)
+
+tags:
+  - name: health
+  - name: carriers
+  - name: loads
+  - name: offers
+  - name: bookings
+  - name: otp
+
+paths:
+  /healthz:
+    get:
+      tags: [health]
+      summary: Liveness probe (no auth)
+      operationId: healthz
+      security: []
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+
+  /v1/carriers/verify:
+    post:
+      tags: [carriers]
+      summary: FMCSA authority check for an MC number
+      operationId: verifyCarrier
+      parameters:
+        - $ref: "#/components/parameters/HrRunId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyCarrierRequest"
+      responses:
+        "200":
+          description: Eligibility result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyCarrierResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          description: FMCSA unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /v1/loads/search:
+    post:
+      tags: [loads]
+      summary: Search open loads (safe fields only)
+      operationId: searchLoads
+      parameters:
+        - $ref: "#/components/parameters/HrRunId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchLoadsRequest"
+      responses:
+        "200":
+          description: Up to three matching loads
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchLoadsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "502":
+          description: TMS bad response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: TMS unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /v1/offers/decide:
+    post:
+      tags: [offers]
+      summary: Workflow-owned negotiation (Twin calls in, agent + calls + offer out)
+      operationId: decideOffer
+      parameters:
+        - $ref: "#/components/parameters/HrRunId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DecideOfferRequest"
+      responses:
+        "200":
+          description: Agent view, Twin calls patch, optional offer log (never exposes ceiling)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DecideOfferResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: Validation or rate not acceptable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: Ceiling or TMS unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /v1/bookings:
+    post:
+      tags: [bookings]
+      summary: Tentatively book a load at an agreed rate
+      operationId: createBooking
+      parameters:
+        - $ref: "#/components/parameters/HrRunId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBookingRequest"
+      responses:
+        "200":
+          description: Booking outcome
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateBookingResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Load not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Load unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or rate not acceptable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: Ceiling or TMS unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /v1/otp/send:
+    post:
+      tags: [otp]
+      summary: Create OTP challenge (hash + expiry); workflow sends email
+      operationId: sendOtp
+      description: |
+        Generates a 6-digit code and challenge material for Twin.
+        Map `otp_code` to Send Email as a **hidden** field only (never expose to the agent).
+      parameters:
+        - $ref: "#/components/parameters/HrRunId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendOtpRequest"
+      responses:
+        "200":
+          description: Challenge created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendOtpResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /v1/otp/verify:
+    post:
+      tags: [otp]
+      summary: Verify caller OTP against Twin challenge fields
+      operationId: verifyOtp
+      parameters:
+        - $ref: "#/components/parameters/HrRunId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyOtpRequest"
+      responses:
+        "200":
+          description: Verification outcome
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyOtpResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  parameters:
+    HrRunId:
+      name: X-HR-Run-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: HappyRobot run id for log correlation
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            error:
+              code: UNAUTHORIZED
+              message: Invalid or missing bearer token
+              retryable: false
+              request_id: req_example
+    ValidationError:
+      description: Invalid request body
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+          example:
+            error:
+              code: VALIDATION_ERROR
+              message: mc_number is required
+              retryable: false
+              request_id: req_example
+
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, retryable, request_id]
+          properties:
+            code:
+              type: string
+              enum:
+                - UNAUTHORIZED
+                - VALIDATION_ERROR
+                - RATE_LIMITED
+                - LOAD_NOT_FOUND
+                - LOAD_UNAVAILABLE
+                - RATE_NOT_ACCEPTABLE
+                - CEILING_UNAVAILABLE
+                - TMS_UNAVAILABLE
+                - TMS_BAD_RESPONSE
+                - FMCSA_UNAVAILABLE
+                - FMCSA_MISCONFIGURED
+                - INTERNAL
+            message:
+              type: string
+            retryable:
+              type: boolean
+            request_id:
+              type: string
+
+    VerifyCarrierRequest:
+      type: object
+      required: [mc_number]
+      properties:
+        mc_number:
+          type: string
+          description: Motor carrier number (digits, optional MC prefix stripped server-side)
+
+    FmcsaReason:
+      type: string
+      enum: [ACTIVE, NOT_AUTHORIZED, OUT_OF_SERVICE, NOT_FOUND]
+
+    VerifyCarrierResponse:
+      type: object
+      required: [eligible, reason]
+      properties:
+        eligible:
+          type: boolean
+        carrier_name:
+          type: string
+        dot_number:
+          type: string
+        reason:
+          $ref: "#/components/schemas/FmcsaReason"
+        contact_email:
+          type: string
+          format: email
+          description: Present only when FMCSA returns an email; workflow must hide from agent
+
+    SearchLoadsRequest:
+      type: object
+      required: [equipment_type]
+      properties:
+        origin_city:
+          type: string
+        origin_state:
+          type: string
+          minLength: 2
+          maxLength: 2
+        dest_state:
+          type: string
+          minLength: 2
+          maxLength: 2
+        equipment_type:
+          type: string
+          description: TMS EQTYPE value (e.g. DRY_VAN, REEFER, FLATBED)
+        pickup_date:
+          type: string
+          format: date
+          description: Optional filter; server maps to TMS pickup window
+
+    LoadLocation:
+      type: object
+      required: [city, state, zip]
+      properties:
+        city:
+          type: string
+        state:
+          type: string
+        zip:
+          type: string
+
+    SafeLoad:
+      type: object
+      required:
+        - id
+        - origin
+        - destination
+        - pickup_at
+        - delivery_at
+        - equipment_type
+        - loadboard_rate
+        - miles
+        - weight
+        - commodity
+        - pieces
+        - dimensions
+        - notes
+      properties:
+        id:
+          type: string
+        origin:
+          $ref: "#/components/schemas/LoadLocation"
+        destination:
+          $ref: "#/components/schemas/LoadLocation"
+        pickup_at:
+          type: string
+          format: date-time
+        delivery_at:
+          type: string
+          format: date-time
+        equipment_type:
+          type: string
+        loadboard_rate:
+          type: integer
+          description: Posted TMS RATE (safe to pitch); not the ceiling
+        miles:
+          type: integer
+        weight:
+          type: integer
+        commodity:
+          type: string
+        pieces:
+          type: integer
+        dimensions:
+          type: string
+        notes:
+          type: string
+
+    SearchLoadsResponse:
+      type: object
+      required: [loads]
+      properties:
+        loads:
+          type: array
+          maxItems: 3
+          items:
+            $ref: "#/components/schemas/SafeLoad"
+
+    DecideOfferRequest:
+      type: object
+      required: [action, load_id]
+      properties:
+        action:
+          type: string
+          enum: [negotiate, accept]
+        load_id:
+          type: string
+        carrier_counter:
+          oneOf:
+            - type: string
+            - type: "null"
+          description: Raw agent text; empty means opening on negotiate
+        otp_status:
+          oneOf:
+            - type: string
+            - type: "null"
+        current_load_id:
+          oneOf:
+            - type: string
+            - type: "null"
+        rounds_used:
+          oneOf:
+            - type: integer
+            - type: "null"
+          minimum: 0
+          maximum: 3
+        standing_offer:
+          oneOf:
+            - type: integer
+            - type: string
+            - type: "null"
+        agreed_rate:
+          oneOf:
+            - type: integer
+            - type: string
+            - type: "null"
+        outcome:
+          oneOf:
+            - type: string
+            - type: "null"
+
+    DecideAgentView:
+      type: object
+      required: [decision, broker_offer, agreed_rate, rounds_remaining]
+      properties:
+        decision:
+          type: string
+          enum:
+            - OPENING
+            - ACCEPT
+            - COUNTER
+            - FINAL_REJECT
+            - INVALID_COUNTER
+            - LOAD_UNAVAILABLE
+            - NOT_VERIFIED
+            - NO_OFFER
+        broker_offer:
+          type: integer
+          nullable: true
+        agreed_rate:
+          type: integer
+          nullable: true
+        rounds_remaining:
+          type: integer
+          minimum: 0
+          maximum: 3
+
+    DecideCallsPatch:
+      type: object
+      required:
+        [current_load_id, rounds_used, standing_offer, agreed_rate, outcome]
+      properties:
+        current_load_id:
+          type: string
+        rounds_used:
+          type: integer
+          minimum: 0
+          maximum: 3
+        standing_offer:
+          type: integer
+          nullable: true
+        agreed_rate:
+          type: integer
+          nullable: true
+        outcome:
+          type: string
+
+    DecideOfferLog:
+      type: object
+      required: [load_id, round, carrier_counter, broker_offer, decision]
+      properties:
+        load_id:
+          type: string
+        round:
+          type: integer
+        carrier_counter:
+          type: integer
+          nullable: true
+        broker_offer:
+          type: integer
+          nullable: true
+        decision:
+          type: string
+
+    DecideOfferResponse:
+      type: object
+      required: [agent, calls, offer]
+      properties:
+        agent:
+          $ref: "#/components/schemas/DecideAgentView"
+        calls:
+          $ref: "#/components/schemas/DecideCallsPatch"
+        offer:
+          oneOf:
+            - $ref: "#/components/schemas/DecideOfferLog"
+            - type: "null"
+
+    CreateBookingRequest:
+      type: object
+      required: [load_id, mc_number, agreed_rate, run_id]
+      properties:
+        load_id:
+          type: string
+        mc_number:
+          type: string
+        agreed_rate:
+          type: integer
+        run_id:
+          type: string
+
+    BookingStatus:
+      type: string
+      enum: [BOOKED, BOOKED_RECONCILED, NOT_BOOKED, LOAD_UNAVAILABLE]
+
+    CreateBookingResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: "#/components/schemas/BookingStatus"
+        booking_ref:
+          type: string
+
+    SendOtpRequest:
+      type: object
+      required: [run_id, mc_number, email, resends]
+      properties:
+        run_id:
+          type: string
+        mc_number:
+          type: string
+        email:
+          type: string
+          format: email
+          description: Destination on file; workflow must pin Send Email To to this value
+        resends:
+          type: integer
+          minimum: 0
+          description: Resends already consumed (from Twin); max 2 before another send is rejected
+        is_resend:
+          type: boolean
+          default: false
+          description: True when the carrier asked for a new code (increments resend count)
+
+    SendOtpResponse:
+      type: object
+      required:
+        - sent
+        - masked_destination
+        - otp_code
+        - code_hash
+        - salt
+        - expires_at
+        - resends
+        - status
+      properties:
+        sent:
+          type: boolean
+        masked_destination:
+          type: string
+          description: Safe hint for the agent
+        otp_code:
+          type: string
+          description: Six digits; workflow hidden field for Send Email body only
+        code_hash:
+          type: string
+        salt:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        resends:
+          type: integer
+          description: Updated resend count to Write Twin
+        status:
+          type: string
+          enum: [pending]
+
+    VerifyOtpRequest:
+      type: object
+      required: [run_id, code, code_hash, salt, expires_at, attempts]
+      properties:
+        run_id:
+          type: string
+        code:
+          type: string
+          description: Digits the carrier said (from tool parameter)
+        code_hash:
+          type: string
+        salt:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        attempts:
+          type: integer
+          minimum: 0
+          description: Failed verify attempts so far (from Twin)
+
+    OtpVerifyResult:
+      type: string
+      enum: [passed, failed, expired, locked_out]
+
+    VerifyOtpResponse:
+      type: object
+      required: [result, attempts, attempts_left, mc_locked]
+      properties:
+        result:
+          $ref: "#/components/schemas/OtpVerifyResult"
+        attempts:
+          type: integer
+          description: Updated attempt count for Write Twin
+        attempts_left:
+          type: integer
+          minimum: 0
+        mc_locked:
+          type: boolean
+          description: True when result is passed
+
+security:
+  - bearerAuth: []

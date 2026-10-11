@@ -1,0 +1,14 @@
+{
+  "content": {
+    "carrierAuthority": [
+      {
+        "authorityType": "MOTOR PROPERTY COMMON CARRIER",
+        "authorityStatus": "A"
+      },
+      {
+        "authorityType": "MOTOR PROPERTY CONTRACT CARRIER",
+        "authorityStatus": "I"
+      }
+    ]
+  }
+}

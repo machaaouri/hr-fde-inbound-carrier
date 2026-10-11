@@ -1,0 +1,37 @@
+{
+  "probed_at": "2026-10-11T15:07:12.851Z",
+  "probe_ok": false,
+  "mc_input": "784219",
+  "mc_docket_digits": "784219",
+  "docket_request": "https://mobile.fmcsa.dot.gov/qc/services/carriers/docket-number/784219?webKey=[REDACTED]",
+  "docket_http_status": 403,
+  "docket_body": {
+    "_parseError": true,
+    "rawPreview": "<html>\r\n<head><title>403 Forbidden</title></head>\r\n<body>\r\n<center><h1>403 Forbidden</h1></center>\r\n</body>\r\n</html>\r\n"
+  },
+  "carrier_parsed": null,
+  "dot_number": null,
+  "authority_request": null,
+  "authority_http_status": null,
+  "authority_body": null,
+  "authority_statuses_extracted": [],
+  "bridge_eligibility_preview": null,
+  "fields_read_by_bridge": {
+    "docket": [
+      "content.carrier (or content[])",
+      "dotNumber",
+      "legalName",
+      "allowedToOperate",
+      "outOfService",
+      "emailAddress | email | emailAddr (optional)"
+    ],
+    "authority": [
+      "content.carrierAuthority[].authorityStatus",
+      "content.carrierAuthority[].status",
+      "content.authorities[] (fallback)"
+    ]
+  },
+  "official_docs": "https://mobile.fmcsa.dot.gov/QCDevsite/docs/qcApi",
+  "fixture_contract": "docs/fmcsa-fixtures/*.json (used when probe_ok is false or offline)",
+  "note": "Live probe did not return a carrier (check webKey / HTTP status). Use docs/fmcsa-fixtures for schema reference."
+}

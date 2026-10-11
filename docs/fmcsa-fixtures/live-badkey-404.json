@@ -1,0 +1,15 @@
+{
+    "content": "Webkey not found",
+    "retrievalDate": "2026-10-11T15:18:17.528+0000",
+    "_links": {
+        "self": {
+            "href": "https://mobile.fmcsa.dot.gov/qc"
+        },
+        "searchByName": {
+            "href": "https://mobile.fmcsa.dot.gov/qc/name/:name"
+        },
+        "lookupBydotNumber": {
+            "href": "https://mobile.fmcsa.dot.gov/qc/id/:dotNumber"
+        }
+    }
+}

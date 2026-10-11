@@ -1,0 +1,15 @@
+{
+  "content": {
+    "carrier": {
+      "dotNumber": 999001,
+      "mcNumber": 784219,
+      "legalName": "Example Carrier LLC",
+      "dbaName": null,
+      "allowedToOperate": "Y",
+      "outOfService": "N",
+      "phyCity": "Chicago",
+      "phyState": "IL",
+      "telephone": "5555550100"
+    }
+  }
+}
