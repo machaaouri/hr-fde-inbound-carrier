@@ -1,9 +1,13 @@
-# HappyRobot workflow exports
+# HappyRobot workflow (Version 3)
 
-Node-by-node specs and exported workflow JSON live here.
+Node specs and exported JSON for the inbound carrier sales voice workflow.
 
-- **W1 (step 2):** [`W1-web-call-verify-search.md`](./W1-web-call-verify-search.md) — web call, agent, `verify_carrier`, `search_loads`.
-- **W2 (step 3):** [`W2-otp-send-verify.md`](./W2-otp-send-verify.md) — OTP send/verify + live search.
-- **W3 (step 4):** [`W3-negotiate-accept.md`](./W3-negotiate-accept.md) — `negotiate` / `accept_offer` via `/v1/offers/decide` (E2E verified).
+| Spec | Scope |
+| --- | --- |
+| [`W1-web-call-verify-search.md`](./W1-web-call-verify-search.md) | Web call, `verify_carrier`, `search_loads` |
+| [`W2-otp-send-verify.md`](./W2-otp-send-verify.md) | `send_otp`, `verify_otp`, search gate |
+| [`W3-negotiate-accept.md`](./W3-negotiate-accept.md) | `negotiate` (opening / counter / **accept**), `book_load` |
 
-Build the workflow in the HappyRobot UI from the specs; export snapshots to [`exports/`](./exports/) (see [`exports/README.md`](./exports/README.md)).
+**Six agent tools:** `verify_carrier`, `search_loads`, `send_otp`, `verify_otp`, `negotiate`, `book_load`.
+
+Export snapshots: [`exports/`](./exports/) — **Version 3** is current for development ([`exports/README.md`](./exports/README.md)).

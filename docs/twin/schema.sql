@@ -1,4 +1,4 @@
--- Twin schema for inbound carrier sales (D5).
+-- Twin schema for inbound carrier sales (Version 3 workflow).
 -- Run in the HappyRobot Twin SQL console. Dollars as BIGINT whole USD. MAX_BUY is never stored.
 
 CREATE TABLE IF NOT EXISTS carrier_contacts (
@@ -15,25 +15,14 @@ CREATE TABLE IF NOT EXISTS calls (
   started_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   ended_at         TIMESTAMPTZ,
   mc_number        TEXT,
-  mc_locked        BOOLEAN NOT NULL DEFAULT FALSE,
   carrier_name     TEXT,
   dot_number       TEXT,
   fmcsa_eligible   BOOLEAN,
   fmcsa_reason     TEXT,
-  fmcsa_status     TEXT,          -- deprecated: not written by Version 2 workflow
-  otp_status       TEXT,
   current_load_id  TEXT,
-  rounds_used      INT NOT NULL DEFAULT 0,
-  standing_offer   BIGINT,
   agreed_rate      BIGINT,
-  loadboard_rate   BIGINT,        -- deprecated: not written by Version 2 workflow
   outcome          TEXT NOT NULL DEFAULT 'abandoned',
-  outcome_reason   TEXT,          -- deprecated: not written by Version 2 workflow
-  booking_ref      TEXT,
-  handoff_status   TEXT,          -- deprecated: not written by Version 2 workflow
-  summary          TEXT,          -- deprecated: not written by Version 2 workflow
-  notes            TEXT,          -- deprecated: not written by Version 2 workflow
-  run_url          TEXT             -- deprecated: not written by Version 2 workflow
+  booking_ref      TEXT
 );
 
 CREATE TABLE IF NOT EXISTS otp_challenges (
@@ -59,15 +48,7 @@ CREATE TABLE IF NOT EXISTS offers (
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS call_events (
-  id       BIGSERIAL PRIMARY KEY,
-  run_id   TEXT NOT NULL REFERENCES calls (run_id) ON DELETE CASCADE,
-  ts       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  type     TEXT NOT NULL,
-  payload  JSONB NOT NULL DEFAULT '{}'::jsonb
-);
-
 CREATE INDEX IF NOT EXISTS idx_calls_outcome ON calls (outcome);
 CREATE INDEX IF NOT EXISTS idx_calls_started ON calls (started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_offers_run ON offers (run_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_events_run ON call_events (run_id, ts);
+CREATE INDEX IF NOT EXISTS idx_offers_run_load_round ON offers (run_id, load_id, round);

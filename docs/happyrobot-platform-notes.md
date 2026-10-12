@@ -42,7 +42,7 @@ These notes answer open questions Q1–Q5 in `PROBLEM_BRIEF.md` and drive workfl
 
 - **Web call trigger:** “Enhanced security” defaults **on** (requires HappyRobot login). Separate URLs per environment (development, staging, production).
 - **Webhook:** “Ignore 5XX errors” allows typed error JSON to reach branch conditions instead of failing the node.
-- **Tools (8):** `verify_carrier`, `send_otp`, `verify_otp`, `search_loads`, `negotiate`, `accept_offer`, `book_load`, `end_call(outcome_hint)`.
+- **Tools (6):** `verify_carrier`, `send_otp`, `verify_otp`, `search_loads`, `negotiate` (opening / counter / `action: accept`), `book_load`.
 - **Branch pattern:** Read Twin → Condition gate → Webhook or Custom Code → Write Twin.
 - **Environments:** separate dev/prod `BRIDGE_BASE_URL` and API keys; ngrok static domain for local dev (see `.env.example`).
 

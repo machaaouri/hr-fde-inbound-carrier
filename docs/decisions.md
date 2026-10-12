@@ -1,6 +1,6 @@
 # Architecture decisions (D1–D8)
 
-This document records implementer decisions for the inbound carrier sales PoC. Source of truth for requirements: `PROBLEM_BRIEF.md`. Workflow export: [`workflow/exports/inbound-carrier-sales-version-2.json`](../workflow/exports/inbound-carrier-sales-version-2.json).
+This document records implementer decisions for the inbound carrier sales PoC. Source of truth for requirements: `PROBLEM_BRIEF.md`. Workflow export: [`workflow/exports/inbound-carrier-sales-version-3.json`](../workflow/exports/inbound-carrier-sales-version-3.json).
 
 ## D1. Bridge API
 
@@ -50,23 +50,24 @@ Rejected alternative: HMAC negotiation tokens (still needs Twin for replay).
 
 System of record; dollars as **bigint** (int8). **MAX_BUY is never stored.**
 
-| Table | Purpose | Writers (Version 2) |
+| Table | Purpose | Writers (Version 3) |
 | --- | --- | --- |
 | `carrier_contacts` | MC → email on file | seed script; workflow when FMCSA returns email |
 | `calls` | per-run state and outcome | workflow tools during the call |
 | `otp_challenges` | hashed OTP, attempts, resends | workflow only |
-| `offers` | negotiation audit | workflow on each decide tool call |
-| `call_events` | append-only audit (optional) | **not written** by current workflow export |
+| `offers` | negotiation audit + history for bridge | workflow on each decide tool call |
 
-Views: `v_kpi_summary` (§7 KPIs), `v_followups` (rep queue and failures). SQL in `docs/twin/`. See `schema.sql` for columns marked `-- deprecated` when nothing in Version 2 writes them.
+`calls` columns: `run_id`, `env`, `started_at`, `ended_at`, `mc_number`, `carrier_name`, `dot_number`, `fmcsa_eligible`, `fmcsa_reason`, `current_load_id`, `agreed_rate`, `outcome`, `booking_ref`. OTP verification and negotiation rounds are **not** duplicated on `calls`.
+
+Views: `v_kpi_summary`, `v_followups` — SQL in `docs/twin/views.sql` (uses `fmcsa_eligible`, `otp_challenges.status`, `offers` for rounds and opening rate).
 
 ## D6. Workflow
 
-- **Export:** [`workflow/exports/inbound-carrier-sales-version-2.json`](../workflow/exports/inbound-carrier-sales-version-2.json) — web call trigger (enhanced security on); inbound voice agent with **7 tools** (`verify_carrier`, `search_loads`, `send_otp`, `verify_otp`, `negotiate`, `accept_offer`, `book_load`).
-- **Negotiate / accept:** Read Twin → Webhook (`/v1/offers/decide`) → Write `calls` → Write `offers` (continue on failure); no Condition nodes on negotiation rounds.
-- **Other gates:** FMCSA eligibility and OTP success use workflow Conditions / Twin fields as documented in W1–W3.
+- **Export:** [`workflow/exports/inbound-carrier-sales-version-3.json`](../workflow/exports/inbound-carrier-sales-version-3.json) — web call trigger (enhanced security on); inbound voice agent with **6 tools** (`verify_carrier`, `search_loads`, `send_otp`, `verify_otp`, `negotiate`, `book_load`).
+- **Negotiate / accept:** Read Twin (`offers` + `otp_challenges`) → Webhook (`/v1/offers/decide` with `action` `negotiate` or `accept`) → patch `calls` from `response.calls` → append `offers` when `response.offer` is set.
+- **Other gates:** FMCSA eligibility (`fmcsa_eligible`) and OTP (`otp_challenges.status`) as documented in W1–W3.
 - Minimal exposed tool results; secrets and ceiling via Fixed values and env-backed headers.
-- Call **outcome** is written to Twin during the call via tool paths; there is no separate post-call AI Extract step in Version 2.
+- Call **outcome** is written during the call via tool paths; no separate post-call AI Extract step.
 - Dev/prod: separate bridge URL and API key; specs in `workflow/W*.md`.
 
 ## D7. Stack and deployment
@@ -74,7 +75,7 @@ Views: `v_kpi_summary` (§7 KPIs), `v_followups` (rep queue and failures). SQL i
 - Node 22, TypeScript strict, Fastify, zod, pino (redaction), vitest, fake TMS in TS, `node:22-slim` Docker image.
 - `make deploy` → Cloud Run from `bridge/` with Secret Manager (step 7).
 - One `BRIDGE_API_KEY`; in-memory rate limit per IP (`@fastify/rate-limit`).
-- CI: lint, typecheck, test, Docker build on push.
+- Before deploy: `npm run lint`, `typecheck`, `test`, and Docker build from `bridge/`.
 
 ## D8. OTP (bridge + platform delivery)
 
@@ -90,7 +91,7 @@ Views: `v_kpi_summary` (§7 KPIs), `v_followups` (rep queue and failures). SQL i
 
 1. Missing MAX_BUY → `CEILING_UNAVAILABLE` / outcome `system_error`.
 2. OTP for every FMCSA pass (stricter than PDF ambiguity).
-3. Margin KPI vs ceiling dropped; report agreed vs loadboard only.
+3. Margin KPI vs ceiling dropped; report agreed vs opening `offers.broker_offer` (not stored on `calls`).
 4. Invalid counters count as a round.
 5. FMCSA: `allowedToOperate=Y`, `oosDate` null, common or contract authority **`A`** (docket or `/authority`); bad webKey → `FMCSA_MISCONFIGURED`; unreachable/geo → `FMCSA_UNAVAILABLE`. Live MC **784219** → `NOT_AUTHORIZED`.
 6. No INVALID_RATE probing from bridge.

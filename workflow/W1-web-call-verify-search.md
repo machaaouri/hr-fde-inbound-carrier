@@ -100,7 +100,7 @@ Expose only what the agent needs:
 3. **Write Twin** (recommended first happy-path wiring):
    - Table: `calls`
    - Primary key: `run_id` = `@current.run_id`
-   - Set: `mc_number`, `carrier_name`, `fmcsa_status` = `passed` if eligible, `outcome` = `abandoned` initially
+   - Set: `mc_number`, `carrier_name`, `dot_number`, `fmcsa_eligible`, `fmcsa_reason`, `outcome` = `abandoned` initially
 
 **Tool Call Result → agent-visible:** `eligible`, `carrier_name` only.
 
@@ -123,7 +123,7 @@ Do **not** expose `contact_email` when live FMCSA adds it (step 5).
 
 ### Branch
 
-1. **Read Twin** (optional gate): `mc_locked` / FMCSA passed — skip in W1 smoke test
+1. **Read Twin** (optional gate): `fmcsa_eligible` — skip in W1 smoke test
 2. **Webhook**
    - Method: `POST`
    - URL: `@BRIDGE_BASE_URL` + `/v1/loads/search`

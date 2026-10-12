@@ -31,7 +31,7 @@
 # decide — unknown load (200 LOAD_UNAVAILABLE)
 curl -sS -X POST http://127.0.0.1:8080/v1/offers/decide \
   -H "Authorization: Bearer $BRIDGE_API_KEY" -H "Content-Type: application/json" \
-  -d '{"action":"negotiate","load_id":"LD_DOES_NOT_EXIST_999","carrier_counter":"","otp_status":"passed","current_load_id":"","rounds_used":0,"standing_offer":null}'
+  -d '{"action":"negotiate","load_id":"LD_DOES_NOT_EXIST_999","carrier_counter":"","otp_challenge_status":"passed","current_load_id":"","offers_history":[]}'
 
 # search — repeat
 curl -sS -X POST http://127.0.0.1:8080/v1/loads/search \

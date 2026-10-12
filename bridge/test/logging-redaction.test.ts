@@ -67,7 +67,6 @@ describe("logging redaction", () => {
       },
     });
     expect(res.statusCode).toBe(200);
-    const blob = logLines.join("\n");
     for (const line of logLines) {
       const parsed = JSON.parse(line) as { fields?: Record<string, unknown>; msg?: string };
       const fields = parsed.fields ?? {};

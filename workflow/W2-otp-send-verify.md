@@ -49,7 +49,7 @@ Negotiate and book tools ship in later milestones; step 5 in the prompt avoids t
 
 On **`search_loads`**, add a **Read Twin** on `calls` for `@current.run_id`:
 
-- **Condition:** `mc_locked` is true (or `otp_status` = `passed`) before the search webhook.
+- **Condition:** `otp_challenges.status` = `passed` before the search webhook.
 - If false → brief message that verification is required; do not call `/v1/loads/search`.
 
 ---
@@ -74,8 +74,7 @@ On **`search_loads`**, add a **Read Twin** on `calls` for `@current.run_id`:
      - `is_resend` — `true` only when the caller asked for a new code
 4. **Write Twin** — upsert `otp_challenges`: `code_hash`, `salt`, `expires_at`, `masked_destination`, `resends`, `status` = `pending`.
 5. **Send Email** — To = same `email`; body includes webhook **`otp_code`** (six digits). Keep **`otp_code` hidden** from Tool Call Result.
-6. **Write Twin** — `calls.otp_status` = `pending`; append `call_events`.
-7. **Tool Call Result (agent):** `sent`, `masked_destination` only.
+6. **Tool Call Result (agent):** `sent`, `masked_destination` only.
 
 On webhook **422** with resend limit → end call / `otp_failed`.
 
@@ -100,7 +99,7 @@ Detail reference: `workflow/otp-bridge-flow.md`.
 1. **Read Twin** — `otp_challenges` + `calls` for `run_id`.
 2. **Webhook** — `POST` `@BRIDGE_BASE_URL` + `/v1/otp/verify`  
    - Body: challenge fields + tool param `code`
-3. **Write Twin** — update `attempts`, `status`; on `result` = `passed` set `calls.mc_locked` = true, `otp_status` = `passed`.
+3. **Write Twin** — update `otp_challenges.attempts` and `otp_challenges.status` from webhook result.
 4. **Tool Call Result (agent):** `result`, `attempts_left` only.
 
 Branch on `result`:

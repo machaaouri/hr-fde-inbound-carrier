@@ -1,34 +1,29 @@
-# Twin setup (platform track — step 1)
+# Twin setup (Version 3 workflow)
 
 Run these scripts **in order** in the HappyRobot Twin SQL console for your org/environment:
 
-1. `schema.sql` — tables and indexes
+1. `schema.sql` — tables and indexes (greenfield)
 2. `views.sql` — `v_kpi_summary` and `v_followups`
-3. `seed.sql` — `carrier_contacts` for **ACTIVE** test MCs (see [`qa/test-carriers.md`](../../qa/test-carriers.md)); OTP sent to seeded email.
+3. `seed.sql` — `carrier_contacts` for **ACTIVE** test MCs (see [`qa/test-carriers.md`](../../qa/test-carriers.md))
 
-## Writers (Version 2 workflow)
+**Existing Twin (Version 2 columns):** run [`migrations/001_version3_slim_calls.sql`](./migrations/001_version3_slim_calls.sql), then re-apply `views.sql`.
+
+## Writers (Version 3)
 
 | Table | Written by |
 | --- | --- |
-| `carrier_contacts` | This seed; workflow when FMCSA returns a new email |
-| `calls` | Workflow tools during the call (`dot_number`, `fmcsa_eligible`, `fmcsa_reason`, negotiation fields, outcome, etc.) |
-| `otp_challenges` | Workflow `send_otp` / `verify_otp` branches only |
-| `offers` | Workflow on each `/v1/offers/decide` tool call |
-| `call_events` | Not used by Version 2 export (table retained for optional audit) |
+| `carrier_contacts` | Seed; workflow when FMCSA returns a new email |
+| `calls` | Workflow tools (`fmcsa_eligible`, negotiation patches, outcome, booking) |
+| `otp_challenges` | Workflow `send_otp` / `verify_otp` only |
+| `offers` | Workflow on each `/v1/offers/decide` call |
 
-Columns in `schema.sql` marked `-- deprecated` are not updated by the current workflow.
+Verification for decide/book webhooks comes from **`otp_challenges.status`**, not `calls`. Negotiation round state lives in **`offers`**, not `calls`.
 
 ## Sanity check
-
-After schema creation, run:
 
 ```sql
 SELECT * FROM v_kpi_summary;
 SELECT * FROM v_followups LIMIT 5;
 ```
 
-Both should succeed with zero or null KPI rows until the first test call (step 2).
-
-## Latency (Q4)
-
-Twin read/write latency is not documented. On first workflow tool use, note round-trip time in run details and adjust hold messaging if needed.
+Both should succeed with zero or null KPI rows until the first test call.

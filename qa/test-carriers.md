@@ -29,7 +29,7 @@ Fixture reference (shapes, no webKey): `docs/fmcsa-fixtures/live-*.json`.
 
 ## Happy path — `ACTIVE` (freight)
 
-Use for W1–W3 E2E; Twin seed (`docs/twin/seed.sql`) maps these MCs to **odocto1@gmail.com** for OTP.
+Use for W1–W3 E2E (Version 3 workflow, 6 tools); Twin seed (`docs/twin/seed.sql`) maps these MCs to **odocto1@gmail.com** for OTP.
 
 | MC | Carrier | DOT | Notes |
 | --- | --- | --- | --- |
