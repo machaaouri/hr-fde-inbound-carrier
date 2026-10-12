@@ -53,6 +53,8 @@ describe("decideOfferForWorkflow (fake TMS)", () => {
         standing_offer: null,
         agreed_rate: null,
         outcome: "abandoned",
+        acceptFromHistory: false,
+        latest_broker_offer: null,
       },
       {
         warn: (_fields, message) => warnings.push(message),
@@ -74,6 +76,8 @@ describe("decideOfferForWorkflow (fake TMS)", () => {
       standing_offer: null,
       agreed_rate: null,
       outcome: "abandoned",
+      acceptFromHistory: false,
+      latest_broker_offer: null,
     });
     expect(out.agent).toEqual({
       decision: "OPENING",

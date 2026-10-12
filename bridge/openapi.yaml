@@ -445,6 +445,20 @@ components:
           oneOf:
             - type: string
             - type: "null"
+          description: Legacy Twin calls.otp_status copy (deprecated when otp_challenge_status or offers_history is sent).
+        otp_challenge_status:
+          oneOf:
+            - type: string
+            - type: "null"
+          description: Preferred verification gate — Twin otp_challenges.status (e.g. passed).
+        offers_history:
+          oneOf:
+            - type: array
+              items:
+                $ref: "#/components/schemas/OfferHistoryRow"
+            - type: string
+            - type: "null"
+          description: Preferred negotiation state — Twin offers rows for this run (JSON array or JSON string).
         current_load_id:
           oneOf:
             - type: string
@@ -455,20 +469,47 @@ components:
             - type: "null"
           minimum: 0
           maximum: 3
+          description: Legacy Twin calls.rounds_used copy (deprecated when offers_history is sent).
         standing_offer:
           oneOf:
             - type: integer
             - type: string
             - type: "null"
+          description: Legacy Twin calls.standing_offer copy; on accept, the price the carrier accepts.
         agreed_rate:
           oneOf:
             - type: integer
             - type: string
             - type: "null"
+          description: Legacy Twin calls.agreed_rate echo (deprecated; bridge returns updated value in response).
         outcome:
           oneOf:
             - type: string
             - type: "null"
+          description: Legacy Twin calls.outcome echo (deprecated; bridge returns updated value when decision sets it).
+
+    OfferHistoryRow:
+      type: object
+      required: [load_id, round, decision]
+      properties:
+        load_id:
+          type: string
+        round:
+          type: integer
+          minimum: 0
+          maximum: 3
+        carrier_counter:
+          oneOf:
+            - type: integer
+            - type: string
+            - type: "null"
+        broker_offer:
+          oneOf:
+            - type: integer
+            - type: string
+            - type: "null"
+        decision:
+          type: string
 
     DecideAgentView:
       type: object
@@ -507,14 +548,21 @@ components:
           type: integer
           minimum: 0
           maximum: 3
+          deprecated: true
+          description: Deprecated Twin mirror; workflow may stop writing after Phase 2.
         standing_offer:
           type: integer
           nullable: true
+          deprecated: true
         agreed_rate:
           type: integer
           nullable: true
+          deprecated: true
+          description: Echo field; not authoritative on request.
         outcome:
           type: string
+          deprecated: true
+          description: Echo field; bridge sets outcome on accept/reject paths.
 
     DecideOfferLog:
       type: object
@@ -548,7 +596,7 @@ components:
 
     CreateBookingRequest:
       type: object
-      required: [load_id, mc_number, agreed_rate, run_id, otp_status, outcome]
+      required: [load_id, mc_number, agreed_rate, run_id, outcome]
       properties:
         load_id:
           type: string
@@ -562,7 +610,10 @@ components:
           type: string
         otp_status:
           type: string
-          description: Twin calls.otp_status (must be passed for TMS book)
+          description: Legacy Twin calls.otp_status (deprecated when otp_challenge_status is sent).
+        otp_challenge_status:
+          type: string
+          description: Preferred — Twin otp_challenges.status (must be passed for TMS book).
         outcome:
           type: string
           description: Twin calls.outcome (must be agreed for TMS book)
@@ -693,7 +744,8 @@ components:
           minimum: 0
         mc_locked:
           type: boolean
-          description: True when result is passed
+          deprecated: true
+          description: Deprecated Twin mirror hint; workflow writes calls.mc_locked from result=passed.
 
 security:
   - bearerAuth: []

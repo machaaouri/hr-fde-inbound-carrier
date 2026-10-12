@@ -16,7 +16,11 @@ import { isBookableLoad } from "../loads/tms-record.ts";
 import { fetchLoadRecord } from "../tms/fetch-load-record.ts";
 import { parseLoadPricingFromRecord } from "./load-pricing.ts";
 import { parseCarrierCounterRaw } from "./parse-carrier-counter.ts";
-import { standingOfferMatchesLastBrokerQuote } from "./standing-offer.ts";
+import {
+  standingOfferMatchesHistoryQuote,
+  standingOfferMatchesLastBrokerQuote,
+} from "./standing-offer.ts";
+import type { ParsedDecideWorkflow } from "./parse-decide-body.ts";
 
 function sameLoad(req: DecideWorkflowRequest): boolean {
   return (
@@ -124,7 +128,18 @@ async function handleAccept(
       422,
     );
   }
-  if (!standingOfferMatchesLastBrokerQuote(fetched.pricing, req.rounds_used, standing)) {
+  const quoteOk = req.acceptFromHistory
+    ? standingOfferMatchesHistoryQuote(
+        standing,
+        req.latest_broker_offer,
+        fetched.pricing.maxBuy,
+      )
+    : standingOfferMatchesLastBrokerQuote(
+        fetched.pricing,
+        req.rounds_used,
+        standing,
+      );
+  if (!quoteOk) {
     throw new BridgeError(
       "RATE_NOT_ACCEPTABLE",
       "Standing offer does not match the last broker offer",
@@ -395,7 +410,15 @@ export async function decideOfferForWorkflow(
   config: BridgeConfig,
   req: DecideWorkflowRequest,
   log?: DecideWorkflowLog,
+  meta?: Pick<ParsedDecideWorkflow, "precedenceWarnings" | "inputStyle">,
 ): Promise<DecideWorkflowResponse> {
+  if (meta?.precedenceWarnings.length) {
+    log?.warn(
+      { fields: meta.precedenceWarnings, input_style: meta.inputStyle },
+      "workflow input precedence: source fields override legacy copies",
+    );
+  }
+
   if (req.otp_status !== "passed") {
     return gateNotVerified(req);
   }

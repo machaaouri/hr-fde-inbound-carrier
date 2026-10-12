@@ -19,6 +19,8 @@ This document records implementer decisions for the inbound carrier sales PoC. S
 
 Pure functions in `bridge/src/negotiation/policy.ts`, unit-tested. Detail: [`negotiation-pricing.md`](./negotiation-pricing.md).
 
+**Phase 1 inputs:** `POST /v1/offers/decide` accepts optional **`offers_history`** (Twin `offers` rows) and **`otp_challenge_status`** (Twin `otp_challenges.status`). When present, the bridge derives `rounds_used` / negotiation standing from history and verifies accept against the latest `broker_offer` for the load. Legacy **`rounds_used`**, **`standing_offer`**, and **`otp_status`** still work for Version 2; source fields win on conflict (warn logged). Shared parsing: `bridge/src/twin/workflow-fields.ts`.
+
 - **Opening** = TMS posted **loadboard_rate** (`RATE`). If `RATE > MAX_BUY`, open at **max_rate** and log a warning (no ceiling value in logs).
 - **Counter ≤ last broker quote** (`standing_offer`) → **ACCEPT** at the carrier’s number.
 - **Close gap** and **counter** rules — see negotiation-pricing.md.
@@ -29,7 +31,7 @@ Pure functions in `bridge/src/negotiation/policy.ts`, unit-tested. Detail: [`neg
 
 ## D3. Round limit
 
-- **Round limit:** Bridge enforces **3 counter rounds** from Twin `rounds_used` on each `POST /v1/offers/decide`; returns updated `calls.rounds_used` and `FINAL_REJECT` when exhausted. Workflow **does not** gate rounds with Conditions — it mirrors Twin from `response.calls`.
+- **Round limit:** Bridge enforces **3 counter rounds** from **`rounds_used`** (legacy `calls` copy or max `round` in **`offers_history`** for the load); returns updated `calls.rounds_used` and `FINAL_REJECT` when exhausted. Workflow **does not** gate rounds with Conditions — it mirrors Twin from `response.calls`.
 - **Fixed tool parameters:** `run_id = @current.run_id`; agent supplies only `carrier_counter` on negotiate (raw string). MC, rounds, standing offer, and load id for accept come from Twin + fixed webhook mapping.
 - **MC change / OTP:** Version 2 workflow does **not** reset Twin OTP state when a new MC is verified mid-call; operators rely on workflow design and Twin writes. **`mc_locked`** on `POST /v1/otp/verify` is returned for the workflow to persist on `calls`; the bridge does not read Twin.
 - **Booking backstop:** ceiling re-check at `POST /v1/bookings` (stateless, no Twin credentials).

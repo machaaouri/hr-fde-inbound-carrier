@@ -1,72 +1,87 @@
 # POST /v1/offers/decide — workflow-owned negotiation
 
-The bridge is **stateless**. HappyRobot reads the Twin `calls` row, POSTs it (plus `action` and raw `carrier_counter`), and writes back `calls` + optional `offers` row from the response. The agent only sees `agent`.
+The bridge is **stateless**. HappyRobot reads Twin, POSTs negotiation context, and writes back `calls` + optional `offers` from the response. The agent only sees `agent`.
 
-## Request
+## Request — legacy (Version 2 workflow)
 
 | Field | Notes |
 |-------|--------|
 | `action` | `"negotiate"` or `"accept"` |
-| `load_id` | Load the carrier picked (`current_load_id` on accept) |
-| `carrier_counter` | Raw string from the agent (`""`, `"1800"`, `"$1,800"`, `"1800.00"`, null) |
-| `otp_status` | From Twin (`"passed"` required for TMS) |
+| `load_id` | Load the carrier picked |
+| `carrier_counter` | Raw string from the agent (`""`, `"1800"`, `"$1,800"`, null) |
+| `otp_status` | Twin `calls.otp_status` (`"passed"` required for TMS) |
 | `current_load_id` | From Twin or `""` |
 | `rounds_used` | `0..3` or null → 0 |
-| `standing_offer` | Twin broker quote (int/string/null) |
-| `agreed_rate` | Twin passthrough (int/string/null) |
-| `outcome` | Twin passthrough; default `"abandoned"` if empty |
+| `standing_offer` | Twin broker quote; on **accept**, the price the carrier accepts |
+| `agreed_rate` | Twin echo (returned updated in `calls`) |
+| `outcome` | Twin echo; default `"abandoned"` if empty |
 
-## Response `200`
+## Request — source-of-truth (optional, Phase 1+)
+
+When present, these **override** the legacy copies (a warning is logged if they disagree).
+
+| Field | Notes |
+|-------|--------|
+| `offers_history` | Twin `offers` rows for the run: array or JSON string. Per **`load_id`**: `rounds_used` = max `round`; negotiation standing = latest non-null `broker_offer`. Rows for other loads ignored. **`round` is not unique** (repeat-quote / accept reuse the same round). |
+| `otp_challenge_status` | Twin `otp_challenges.status` (e.g. `passed`) — preferred over `otp_status`. |
+
+**Accept with history:** `standing_offer` in the body is still the price being accepted; it must equal the latest `broker_offer` for that load in `offers_history` (and ≤ ceiling), or the bridge returns **422** `RATE_NOT_ACCEPTABLE`.
+
+### Example — legacy opening
 
 ```json
 {
-  "agent": {
-    "decision": "OPENING",
-    "broker_offer": 821,
-    "agreed_rate": null,
-    "rounds_remaining": 3
-  },
-  "calls": {
-    "current_load_id": "LD00923",
-    "rounds_used": 0,
-    "standing_offer": 821,
-    "agreed_rate": null,
-    "outcome": "abandoned"
-  },
-  "offer": {
-    "load_id": "LD00923",
-    "round": 0,
-    "carrier_counter": null,
-    "broker_offer": 821,
-    "decision": "OPENING"
-  }
+  "action": "negotiate",
+  "load_id": "LD0000045821",
+  "carrier_counter": "",
+  "otp_status": "passed",
+  "current_load_id": "",
+  "rounds_used": 0,
+  "standing_offer": null,
+  "agreed_rate": null,
+  "outcome": "abandoned"
 }
 ```
 
-- **`agent`**: map to the voice agent tool output only.
-- **`calls`**: upsert Twin `calls` exactly (dollars as numbers; workflow casts to bigint).
-- **`offer`**: insert into Twin `offers` when non-null; null for `NOT_VERIFIED`, `NO_OFFER`, and some gate paths.
+### Example — source counter (equivalent state)
+
+```json
+{
+  "action": "negotiate",
+  "load_id": "LD0000045821",
+  "carrier_counter": "2200",
+  "otp_challenge_status": "passed",
+  "current_load_id": "LD0000045821",
+  "offers_history": [
+    { "load_id": "LD0000045821", "round": 0, "carrier_counter": null, "broker_offer": 1950, "decision": "OPENING" }
+  ]
+}
+```
+
+## Response `200`
+
+Unchanged shape — see [`offers-decide-response.md`](./offers-decide-response.md). `calls.rounds_used`, `calls.standing_offer`, and echo fields remain for Version 2 but are **deprecated** on the request side.
 
 ### Decisions on `agent.decision`
 
 | Decision | TMS | Notes |
 |----------|-----|--------|
-| `NOT_VERIFIED` | No | `otp_status !== "passed"` |
+| `NOT_VERIFIED` | No | Verification not `passed` |
 | `NO_OFFER` | No | accept without `standing_offer` |
-| `LOAD_UNAVAILABLE` | Maybe | Unknown or non-open load → **200**, not 404/409 |
+| `LOAD_UNAVAILABLE` | Maybe | Unknown or non-open load → **200** |
 | `OPENING` | Yes | Empty counter, new load or `rounds_used === 0` |
-| `COUNTER` | Yes / No | Counter from carrier, or re-pitch same load + empty counter |
-| `INVALID_COUNTER` | Usually | Bad format without TMS; policy invalid after GET |
-| `FINAL_REJECT` | No if `rounds_used >= 3` | Sets `outcome` → `failed_negotiation` |
-| `ACCEPT` | Yes | accept action or counter ≤ broker quote; `outcome` → `agreed` |
+| `COUNTER` | Yes / No | Carrier counter or re-pitch |
+| `INVALID_COUNTER` | Usually | Bad format |
+| `FINAL_REJECT` | No if `rounds_used >= 3` | `outcome` → `failed_negotiation` |
+| `ACCEPT` | Yes | accept or counter ≤ broker quote; `outcome` → `agreed` |
 
-Pricing rules: [`negotiation-pricing.md`](./negotiation-pricing.md). HappyRobot wiring: [`workflow/W3-negotiate-accept.md`](../workflow/W3-negotiate-accept.md).
+Pricing: [`negotiation-pricing.md`](./negotiation-pricing.md). Wiring: [`workflow/W3-negotiate-accept.md`](../workflow/W3-negotiate-accept.md).
 
-TMS transport/parser failures remain **`502` / `504`** error envelopes. `RATE_NOT_ACCEPTABLE` on accept stays **`422`**.
+TMS failures → **502/504**. Accept rate mismatch → **422** `RATE_NOT_ACCEPTABLE`.
 
 ## Round indexing
 
-- Workflow stores **`rounds_used`** (counters consumed).
-- Negotiate counter uses policy round **`rounds_used + 1`** (or `1` after a load change).
-- **`rounds_remaining` = max(0, 3 - rounds_used)** after the decision (using updated `rounds_used` when a counter round is consumed).
+- **`rounds_used`** = counters consumed (from history max `round` or legacy copy).
+- Counter policy round = **`rounds_used + 1`** on same load (or `1` after load change).
+- **`rounds_remaining` = max(0, 3 - rounds_used)** after the decision.
 - Accept does **not** increment `rounds_used`.

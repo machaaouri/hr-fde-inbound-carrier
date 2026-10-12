@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { parseTwinDollarField } from "../offers/parse-decide-body.ts";
+import {
+  defaultOutcome,
+  parseTwinDollarField,
+  resolveVerificationStatus,
+  verificationFieldDisagreements,
+  type WorkflowInputStyle,
+} from "../twin/workflow-fields.ts";
 import type { BookingWorkflowRequest } from "./booking-types.ts";
 
 const bookingWorkflowBodySchema = z.object({
@@ -8,21 +14,42 @@ const bookingWorkflowBodySchema = z.object({
   agreed_rate: z.union([z.number(), z.string(), z.null()]).optional(),
   run_id: z.string().min(1),
   otp_status: z.union([z.string(), z.null()]).optional(),
+  otp_challenge_status: z.union([z.string(), z.null()]).optional(),
   outcome: z.union([z.string(), z.null()]).optional(),
 });
 
-export function parseBookingWorkflowInput(body: unknown): BookingWorkflowRequest {
+export type ParsedBookingWorkflow = BookingWorkflowRequest & {
+  inputStyle: WorkflowInputStyle;
+  precedenceWarnings: string[];
+};
+
+export function parseBookingWorkflowInput(body: unknown): ParsedBookingWorkflow {
   const parsed = bookingWorkflowBodySchema.parse(body);
-  const outcomeRaw = parsed.outcome?.trim() ?? "";
-  const outcome = outcomeRaw === "" ? "abandoned" : outcomeRaw;
-  const otpRaw = parsed.otp_status?.trim() ?? "";
+  const legacyOtp = parsed.otp_status?.trim() ?? "";
+  const verification = resolveVerificationStatus(
+    parsed.otp_status,
+    parsed.otp_challenge_status,
+  );
+  const precedenceWarnings = verification.usedChallengeStatus
+    ? verificationFieldDisagreements(
+        legacyOtp,
+        verification.otp_status,
+        true,
+      )
+    : [];
+
+  const inputStyle: WorkflowInputStyle = verification.usedChallengeStatus
+    ? "source"
+    : "legacy";
 
   return {
     load_id: parsed.load_id.trim(),
     mc_number: parsed.mc_number.trim(),
     agreed_rate: parseTwinDollarField(parsed.agreed_rate),
     run_id: parsed.run_id.trim(),
-    otp_status: otpRaw === "" ? "pending" : otpRaw,
-    outcome,
+    otp_status: verification.otp_status,
+    outcome: defaultOutcome(parsed.outcome),
+    inputStyle,
+    precedenceWarnings,
   };
 }

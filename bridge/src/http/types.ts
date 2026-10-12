@@ -26,6 +26,7 @@ export type RouteOutcomeSnapshot = {
   decision?: string;
   status?: string;
   error_code?: ApiErrorCode | string;
+  input_style?: "legacy" | "source";
 };
 
 export type RequestContext = {

@@ -19,6 +19,9 @@ export type DecideWorkflowRequest = {
   standing_offer: number | null;
   agreed_rate: number | null;
   outcome: string;
+  /** When true, accept must match latest broker_offer from offers_history. */
+  acceptFromHistory: boolean;
+  latest_broker_offer: number | null;
 };
 
 export type DecideOfferLog = {
