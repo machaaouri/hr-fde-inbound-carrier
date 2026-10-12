@@ -9,5 +9,7 @@ export function createRequestContext(req: FastifyRequest): RequestContext {
   return {
     requestId: randomUUID(),
     hrRunId: typeof hrRunId === "string" ? hrRunId : undefined,
+    startedAtMs: performance.now(),
+    tmsMs: 0,
   };
 }

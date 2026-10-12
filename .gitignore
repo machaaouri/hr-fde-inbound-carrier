@@ -150,3 +150,6 @@ vite.config.ts.timestamp-*
 
 # Cursor IDE (local plans, rules)
 .cursor/
+
+# macOS
+.DS_Store

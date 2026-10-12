@@ -206,7 +206,7 @@ async function main(): Promise<void> {
     process.exitCode = 1;
   }
 
-  const outPath = resolve(repoRoot, "docs/fmcsa-probe-results.json");
+  const outPath = resolve(repoRoot, "docs/archive/fmcsa-probe-results.json");
   const json = `${JSON.stringify(report, null, 2)}\n`;
   writeFileSync(outPath, json, "utf8");
   process.stdout.write(json);

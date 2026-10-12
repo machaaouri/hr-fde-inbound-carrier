@@ -4,16 +4,18 @@ import { ZodError } from "zod";
 import type { BridgeConfig } from "../config/types.ts";
 import { BridgeError, toErrorEnvelope, unauthorizedError } from "../http/errors.ts";
 import { createRequestContext } from "../http/request-context.ts";
+import { bindRequestContext } from "../http/request-timing.ts";
+import {
+  endpointForUrl,
+  logRouteOutcome,
+  setRouteOutcome,
+} from "../http/route-log.ts";
 import { parseSearchLoadsInput } from "../loads/parse-search-body.ts";
 import { sendOtpBody, verifyCarrierBody, verifyOtpBody } from "../http/schemas.ts";
 import { bookingForWorkflow } from "../bookings/booking-workflow-service.ts";
 import { parseBookingWorkflowInput } from "../bookings/parse-booking-body.ts";
 import { decideOfferForWorkflow } from "../offers/decide-service.ts";
-import {
-  decideLogRound,
-  parseDecideWorkflowInput,
-} from "../offers/parse-decide-body.ts";
-import { parseCarrierCounterRaw } from "../offers/parse-carrier-counter.ts";
+import { parseDecideWorkflowInput } from "../offers/parse-decide-body.ts";
 import { verifyCarrierByMc } from "../carriers/verify-service.ts";
 import { FmcsaClient } from "../fmcsa/client.ts";
 import type { VerifyCarrierResult } from "../fmcsa/types.ts";
@@ -26,6 +28,24 @@ export type BuildAppDeps = {
   fmcsa?: FmcsaClient;
 };
 
+const LOG_REDACT_PATHS = [
+  "req.headers.authorization",
+  "req.body.otp_code",
+  "req.body.code",
+  "req.body.code_hash",
+  "req.body.salt",
+  "TMS_TOKEN",
+  "FMCSA_API_KEY",
+  "BRIDGE_API_KEY",
+  "max_rate",
+  "maxBuy",
+  "max_buy",
+  "MAX_BUY",
+  "*.max_rate",
+  "*.maxBuy",
+  "*.max_buy",
+];
+
 export async function buildApp(
   config: BridgeConfig,
   deps: BuildAppDeps = {},
@@ -36,14 +56,7 @@ export async function buildApp(
     logger: {
       level: config.logLevel,
       redact: {
-        paths: [
-          "req.headers.authorization",
-          "req.body.otp_code",
-          "req.body.code",
-          "TMS_TOKEN",
-          "FMCSA_API_KEY",
-          "BRIDGE_API_KEY",
-        ],
+        paths: LOG_REDACT_PATHS,
         remove: true,
       },
     },
@@ -58,29 +71,49 @@ export async function buildApp(
   app.addHook("onRequest", async (req, reply) => {
     const ctx = createRequestContext(req);
     req.ctx = ctx;
+    bindRequestContext(ctx);
     reply.header("x-request-id", ctx.requestId);
-    if (ctx.hrRunId) {
-      req.log.info({ hrRunId: ctx.hrRunId }, "happyrobot run");
+  });
+
+  app.addHook("onResponse", async (req, reply) => {
+    if (req.ctx.routeOutcome === undefined && reply.statusCode >= 400) {
+      setRouteOutcome(req, {
+        endpoint: endpointForUrl(req.url),
+        status: "error",
+        error_code: reply.statusCode === 401 ? "UNAUTHORIZED" : "INTERNAL",
+      });
     }
+    logRouteOutcome(req.log, req);
   });
 
   app.setErrorHandler((err, req, reply) => {
     const requestId = req.ctx?.requestId ?? "unknown";
-    if (err instanceof BridgeError && err.retryable) {
-      req.log.warn(
-        { err, code: err.code, requestId, hrRunId: req.ctx?.hrRunId },
-        "bridge request failed (retryable)",
-      );
-    }
+    const endpoint = endpointForUrl(req.url);
     if (err instanceof ZodError) {
       const message = err.issues[0]?.message ?? "Validation failed";
+      const bridgeErr = new BridgeError("VALIDATION_ERROR", message, 422);
+      setRouteOutcome(req, {
+        endpoint,
+        status: "error",
+        error_code: bridgeErr.code,
+      });
       return reply
         .status(422)
-        .send(toErrorEnvelope(new BridgeError("VALIDATION_ERROR", message, 422), requestId));
+        .send(toErrorEnvelope(bridgeErr, requestId));
     }
     if (err instanceof BridgeError) {
+      setRouteOutcome(req, {
+        endpoint,
+        status: "error",
+        error_code: err.code,
+      });
       return reply.status(err.statusCode).send(toErrorEnvelope(err, requestId));
     }
+    setRouteOutcome(req, {
+      endpoint,
+      status: "error",
+      error_code: "INTERNAL",
+    });
     req.log.error({ err }, "unhandled error");
     return reply.status(500).send(
       toErrorEnvelope(
@@ -100,45 +133,46 @@ export async function buildApp(
     }
   }
 
-  app.get("/health", async () => ({ status: "ok" as const }));
+  app.get("/health", async (req) => {
+    setRouteOutcome(req, { endpoint: "health", status: "ok" });
+    return { status: "ok" as const };
+  });
 
   app.post("/v1/carriers/verify", async (req) => {
     requireAuth(req.headers.authorization);
     const body = verifyCarrierBody.parse(req.body);
     const result = await verifyCarrierByMc(fmcsa, body.mc_number);
-    req.log.info(
-      {
-        requestId: req.ctx?.requestId,
-        eligible: result.eligible,
-        reason: result.reason,
-      },
-      "carriers/verify",
-    );
+    setRouteOutcome(req, {
+      endpoint: "carriers/verify",
+      status: result.eligible ? "eligible" : "ineligible",
+      decision: result.reason,
+    });
     return toVerifyCarrierWire(result);
   });
 
   app.post("/v1/loads/search", async (req) => {
     requireAuth(req.headers.authorization);
     const input = parseSearchLoadsInput(req.body);
-    return searchLoads(tms, config.tmsToken, input);
+    const result = await searchLoads(tms, config.tmsToken, input);
+    setRouteOutcome(req, {
+      endpoint: "loads/search",
+      status: "ok",
+      decision: String(result.loads.length),
+    });
+    return result;
   });
 
   app.post("/v1/offers/decide", async (req) => {
     requireAuth(req.headers.authorization);
     const body = parseDecideWorkflowInput(req.body);
-    const counter = parseCarrierCounterRaw(body.carrier_counter);
     const result = await decideOfferForWorkflow(tms, config, body, {
       warn: (fields, message) => req.log.warn(fields, message),
     });
-    req.log.info(
-      {
-        requestId: req.ctx?.requestId,
-        action: body.action,
-        decision: result.agent.decision,
-        round: decideLogRound(body, counter),
-      },
-      "offers/decide",
-    );
+    setRouteOutcome(req, {
+      endpoint: "offers/decide",
+      decision: result.agent.decision,
+      status: body.action,
+    });
     return result;
   });
 
@@ -146,27 +180,34 @@ export async function buildApp(
     requireAuth(req.headers.authorization);
     const body = parseBookingWorkflowInput(req.body);
     const result = await bookingForWorkflow(tms, config, body);
-    req.log.info(
-      {
-        request_id: req.ctx?.requestId,
-        load_id: body.load_id,
-        status: result.agent.status,
-      },
-      "bookings/create",
-    );
+    setRouteOutcome(req, {
+      endpoint: "bookings/create",
+      status: result.agent.status,
+    });
     return result;
   });
 
   app.post("/v1/otp/send", async (req) => {
     requireAuth(req.headers.authorization);
     const body = sendOtpBody.parse(req.body);
-    return handleSendOtp(body);
+    const out = handleSendOtp(body);
+    setRouteOutcome(req, {
+      endpoint: "otp/send",
+      status: "sent",
+    });
+    return out;
   });
 
   app.post("/v1/otp/verify", async (req) => {
     requireAuth(req.headers.authorization);
     const body = verifyOtpBody.parse(req.body);
-    return handleVerifyOtp(body);
+    const out = handleVerifyOtp(body);
+    setRouteOutcome(req, {
+      endpoint: "otp/verify",
+      status: out.result,
+      decision: String(out.attempts),
+    });
+    return out;
   });
 
   return app;

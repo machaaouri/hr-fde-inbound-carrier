@@ -1,11 +1,11 @@
 # Architecture decisions (D1–D8)
 
-This document records implementer decisions for the inbound carrier sales PoC. Source of truth for requirements: `PROBLEM_BRIEF.md`. Approved design detail: `.cursor/plans/inbound_carrier_design.plan.md`.
+This document records implementer decisions for the inbound carrier sales PoC. Source of truth for requirements: `PROBLEM_BRIEF.md`. Workflow export: [`workflow/exports/inbound-carrier-sales-version-2.json`](../workflow/exports/inbound-carrier-sales-version-2.json).
 
 ## D1. Bridge API
 
 - **Base path:** `/v1` on HTTPS. **Auth:** `Authorization: Bearer <BRIDGE_API_KEY>` on every route except `GET /health`.
-- **Correlation:** optional header `X-HR-Run-Id` (workflow insert `@current.run_id`); logged with request ID, never returned to the agent except via workflow state.
+- **Correlation:** optional header `X-HR-Run-Id` (workflow insert `@current.run_id`); logged as `hr_run_id` with `request_id` on each route outcome line, never returned to the agent except via workflow state.
 - **Workflow wiring:** URL = `@BRIDGE_BASE_URL` + path; webhook **Bearer Token** = `@BRIDGE_API_KEY` (see `docs/happyrobot-platform-notes.md` Q3).
 - **Routes:**
   - `POST /v1/carriers/verify` — `{ mc_number }` → `{ eligible, carrier_name?, dot_number?, reason, contact_email? }`. `contact_email` only when FMCSA returns one; workflow hides it from the agent.
@@ -19,19 +19,19 @@ This document records implementer decisions for the inbound carrier sales PoC. S
 
 Pure functions in `bridge/src/negotiation/policy.ts`, unit-tested. Detail: [`negotiation-pricing.md`](./negotiation-pricing.md).
 
-- **Opening** = TMS posted **loadboard_rate** (`RATE`). If `RATE > MAX_BUY`, open at **max_rate** and log a warning.
+- **Opening** = TMS posted **loadboard_rate** (`RATE`). If `RATE > MAX_BUY`, open at **max_rate** and log a warning (no ceiling value in logs).
 - **Counter ≤ last broker quote** (`standing_offer`) → **ACCEPT** at the carrier’s number.
-- **Counter above last quote** → broker moves partway toward the carrier (round fractions, **floor $25**), never above **max_rate** or the carrier’s counter; each broker counter **≥** the previous quote; soft caps below max_rate so counters do not sit on max every round.
+- **Close gap** and **counter** rules — see negotiation-pricing.md.
 - **Up to 3 counter rounds** (`rounds_used` 0..3 on Twin); no deal after round 3 → **FINAL_REJECT**.
-- **max_rate** (`MAX_BUY`) is used only inside the bridge; HTTP/JSON never exposes it.
+- **max_rate** (`MAX_BUY`) is used only inside the bridge; HTTP/JSON and logs never expose it.
 - **`accept`** (`action: accept`) does not consume a counter round.
 - Invalid counter format → **INVALID_COUNTER** (still advances `rounds_used` when a counter was attempted).
 
-## D3. Round limit and MC lock
+## D3. Round limit
 
 - **Round limit:** Bridge enforces **3 counter rounds** from Twin `rounds_used` on each `POST /v1/offers/decide`; returns updated `calls.rounds_used` and `FINAL_REJECT` when exhausted. Workflow **does not** gate rounds with Conditions — it mirrors Twin from `response.calls`.
 - **Fixed tool parameters:** `run_id = @current.run_id`; agent supplies only `carrier_counter` on negotiate (raw string). MC, rounds, standing offer, and load id for accept come from Twin + fixed webhook mapping.
-- **MC lock:** set after OTP success; new MC on `verify_carrier` resets OTP/MC state.
+- **MC change / OTP:** Version 2 workflow does **not** reset Twin OTP state when a new MC is verified mid-call; operators rely on workflow design and Twin writes. **`mc_locked`** on `POST /v1/otp/verify` is returned for the workflow to persist on `calls`; the bridge does not read Twin.
 - **Booking backstop:** ceiling re-check at `POST /v1/bookings` (stateless, no Twin credentials).
 
 Rejected alternative: HMAC negotiation tokens (still needs Twin for replay).
@@ -48,24 +48,24 @@ Rejected alternative: HMAC negotiation tokens (still needs Twin for replay).
 
 System of record; dollars as **bigint** (int8). **MAX_BUY is never stored.**
 
-| Table | Purpose | Writers |
+| Table | Purpose | Writers (Version 2) |
 | --- | --- | --- |
 | `carrier_contacts` | MC → email on file | seed script; workflow when FMCSA returns email |
-| `calls` | per-run state and outcome | workflow tools; post-call enrichment |
+| `calls` | per-run state and outcome | workflow tools during the call |
 | `otp_challenges` | hashed OTP, attempts, resends | workflow only |
-| `offers` | negotiation audit | workflow |
-| `call_events` | append-only audit | workflow |
+| `offers` | negotiation audit | workflow on each decide tool call |
+| `call_events` | append-only audit (optional) | **not written** by current workflow export |
 
-Views: `v_kpi_summary` (§7 KPIs), `v_followups` (rep queue and failures). SQL in `docs/twin/`.
+Views: `v_kpi_summary` (§7 KPIs), `v_followups` (rep queue and failures). SQL in `docs/twin/`. See `schema.sql` for columns marked `-- deprecated` when nothing in Version 2 writes them.
 
 ## D6. Workflow
 
-- Web call trigger (enhanced security on); inbound voice agent with 8 tools.
-- **Negotiate / accept:** Read Twin → Webhook (`/v1/offers/decide`) → Write `calls` → Write `offers` (continue on failure); no Conditions on negotiation.
-- Other tools may still use Condition gates (OTP, FMCSA, etc.).
+- **Export:** [`workflow/exports/inbound-carrier-sales-version-2.json`](../workflow/exports/inbound-carrier-sales-version-2.json) — web call trigger (enhanced security on); inbound voice agent with **7 tools** (`verify_carrier`, `search_loads`, `send_otp`, `verify_otp`, `negotiate`, `accept_offer`, `book_load`).
+- **Negotiate / accept:** Read Twin → Webhook (`/v1/offers/decide`) → Write `calls` → Write `offers` (continue on failure); no Condition nodes on negotiation rounds.
+- **Other gates:** FMCSA eligibility and OTP success use workflow Conditions / Twin fields as documented in W1–W3.
 - Minimal exposed tool results; secrets and ceiling via Fixed values and env-backed headers.
-- Post-call AI Extract → `calls.summary` / `calls.notes` (best effort; outcome written during call).
-- Dev/prod: separate bridge URL and API key; workflow export under `workflow/`.
+- Call **outcome** is written to Twin during the call via tool paths; there is no separate post-call AI Extract step in Version 2.
+- Dev/prod: separate bridge URL and API key; specs in `workflow/W*.md`.
 
 ## D7. Stack and deployment
 
@@ -80,9 +80,8 @@ Views: `v_kpi_summary` (§7 KPIs), `v_followups` (rep queue and failures). SQL i
 
 - After FMCSA pass: contact from Twin seed first, then FMCSA email if `OTP_FMCSA_FALLBACK=on` (production only). Workflow resolves email via Read Twin before calling the bridge.
 - **`POST /v1/otp/send`** — bridge generates 6-digit code, salt, SHA-256 hash, expiry; returns fields for **Write Twin** (`otp_challenges`) and a hidden **`otp_code`** for **Send Email** (To = email from Twin, fixed in workflow).
-- **`POST /v1/otp/verify`** — workflow Read Twin passes hash/salt/expiry/attempts + caller code; bridge verifies; workflow Write Twin updates attempts/status and sets `mc_locked=true` on success.
+- **`POST /v1/otp/verify`** — workflow Read Twin passes hash/salt/expiry/attempts + caller code; bridge verifies; response includes **`mc_locked: true`** on success for the workflow to **Write Twin** on `calls` (`mc_locked`, `otp_status`). Bridge does not connect to Twin.
 - Limits: 5 min TTL, max 3 verify attempts, max 2 resends (resend replaces challenge). Constant-time compare in `bridge/src/otp/`.
-- Bridge does **not** connect to Twin; workflow **Read/Write Twin** nodes persist state.
 - Residual risk: `otp_code` visible in run details (webhook + email node inputs) to platform users with run access—not in agent context.
 
 ## Resolved requirements (summary)

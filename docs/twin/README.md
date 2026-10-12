@@ -6,15 +6,17 @@ Run these scripts **in order** in the HappyRobot Twin SQL console for your org/e
 2. `views.sql` — `v_kpi_summary` and `v_followups`
 3. `seed.sql` — `carrier_contacts` for **ACTIVE** test MCs (see [`qa/test-carriers.md`](../../qa/test-carriers.md)); OTP sent to seeded email.
 
-## Writers (who updates what)
+## Writers (Version 2 workflow)
 
 | Table | Written by |
 | --- | --- |
 | `carrier_contacts` | This seed; workflow when FMCSA returns a new email |
-| `calls` | Workflow tools during the call; post-call nodes for summary/notes |
+| `calls` | Workflow tools during the call (`dot_number`, `fmcsa_eligible`, `fmcsa_reason`, negotiation fields, outcome, etc.) |
 | `otp_challenges` | Workflow `send_otp` / `verify_otp` branches only |
-| `offers` | Workflow on each negotiation tool call |
-| `call_events` | Workflow for audit events |
+| `offers` | Workflow on each `/v1/offers/decide` tool call |
+| `call_events` | Not used by Version 2 export (table retained for optional audit) |
+
+Columns in `schema.sql` marked `-- deprecated` are not updated by the current workflow.
 
 ## Sanity check
 

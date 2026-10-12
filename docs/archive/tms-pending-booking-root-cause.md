@@ -26,11 +26,6 @@ The bridge required `STATUS:BOOKED` on the book wire → `TMS_BAD_RESPONSE` → 
 `bridge/src/bookings/submit-load-book.ts` — treat `PENDING` + `BOOKING_REF` as success.  
 `bridge/src/bookings/create-booking-service.ts` — reconcile **PENDING** when `BOOKING_REF` is on the GET record.
 
-## Reproduce locally
+## Verification
 
-```bash
-npx tsx bridge/scripts/pending-trace.ts   # needs .env TMS + BRIDGE_API_KEY
-npx tsx bridge/scripts/book-wire-probe.ts # first OPEN load → wire STATUS:PENDING + ref
-```
-
-After deploy, the same trace should end in **`BOOKED`** with the wire `BOOKING_REF`.
+After deploy, negotiate → accept → book against the bridge should end in **`BOOKED`** with a wire `BOOKING_REF`. See `bridge/test/negotiate-then-book.test.ts` and live booking fixes in `submit-load-book.ts`.

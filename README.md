@@ -18,8 +18,8 @@ Requirements: `PROBLEM_BRIEF.md`. Architecture decisions: `docs/decisions.md`. T
 
 1. Copy `.env.example` to `.env` and fill secrets (never commit `.env`).
 2. Install bridge tooling: `make install`
-3. Probe live TMS (no secrets printed): `make probe-tms` → updates `docs/tms-probe-results.json`  
-   Probe FMCSA: `make probe-fmcsa` → updates `docs/fmcsa-probe-results.json` (test MCs: [`qa/test-carriers.md`](qa/test-carriers.md))  
+3. Probe live TMS (no secrets printed): `make probe-tms` → updates `docs/archive/tms-probe-results.json`  
+   Probe FMCSA: `make probe-fmcsa` → updates `docs/archive/fmcsa-probe-results.json` (test MCs: [`qa/test-carriers.md`](qa/test-carriers.md))  
    Run in your **system terminal** (needs outbound TCP to `TMS_HOST`). Progress logs go to stderr.  
    If you see a timeout on `LOAD_QUERY`, re-run — the TMS randomly injects slow/no responses; the probe retries twice.
 4. CI locally: `make lint typecheck test docker-build`

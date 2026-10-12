@@ -10,6 +10,7 @@ import {
 } from "./constants.ts";
 import { parseTmsResponse } from "./parser.ts";
 import type { ParsedTmsResponse } from "./parser-types.ts";
+import { addTmsDuration } from "../http/request-timing.ts";
 import { bridgeErrorFromTmsWire } from "./map-wire-error.ts";
 
 export type TmsClientOptions = {
@@ -80,6 +81,15 @@ export class TmsClient {
   }
 
   private async requestOnce(requestLine: string, label: string): Promise<string[]> {
+    const t0 = performance.now();
+    try {
+      return await this.requestOnceSocket(requestLine, label);
+    } finally {
+      addTmsDuration(Math.round(performance.now() - t0));
+    }
+  }
+
+  private async requestOnceSocket(requestLine: string, label: string): Promise<string[]> {
     return new Promise((resolve, reject) => {
       let settled = false;
       const lines: string[] = [];
@@ -95,8 +105,6 @@ export class TmsClient {
         action();
       };
 
-      let socket: Socket;
-
       const connectTimer = setTimeout(() => {
         finish(() => reject(new Error(`${label}: connect timeout`)));
       }, this.connectMs);
@@ -105,7 +113,7 @@ export class TmsClient {
         finish(() => reject(new Error(`${label}: response timeout`)));
       }, this.responseMs);
 
-      socket = createConnection({ host: this.host, port: this.port }, () => {
+      const socket: Socket = createConnection({ host: this.host, port: this.port }, () => {
         clearTimeout(connectTimer);
         socket.write(requestLine);
       });

@@ -17,4 +17,4 @@ Code: `bridge/src/fmcsa/`, `bridge/src/carriers/verify-service.ts`. Manual cases
 
 **Test MC catalog:** [`qa/test-carriers.md`](../qa/test-carriers.md) (ACTIVE / NOT_AUTHORIZED / edge cases).
 
-**Response contract in-repo:** [`fmcsa-handbook-notes.md`](./fmcsa-handbook-notes.md), fixtures `docs/fmcsa-fixtures/live-*.json`, and [`fmcsa-probe-results.json`](./fmcsa-probe-results.json) (`make probe-fmcsa`; optional `FMCSA_PROBE_MC`, default **784219** in Makefile — prefer **136818** on US egress).
+**Response contract in-repo:** [`fmcsa-handbook-notes.md`](./fmcsa-handbook-notes.md), fixtures `docs/fmcsa-fixtures/live-*.json`, and [`archive/fmcsa-probe-results.json`](./archive/fmcsa-probe-results.json) (`make probe-fmcsa`; optional `FMCSA_PROBE_MC`, default **784219** in Makefile — prefer **136818** on US egress).

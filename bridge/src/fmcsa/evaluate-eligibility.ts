@@ -1,4 +1,4 @@
-import type { FmcsaReason, VerifyCarrierResult } from "./types.ts";
+import type { VerifyCarrierResult } from "./types.ts";
 
 function yn(value: unknown): boolean {
   return typeof value === "string" && value.trim().toUpperCase() === "Y";

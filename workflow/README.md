@@ -6,4 +6,4 @@ Node-by-node specs and exported workflow JSON live here.
 - **W2 (step 3):** [`W2-otp-send-verify.md`](./W2-otp-send-verify.md) — OTP send/verify + live search.
 - **W3 (step 4):** [`W3-negotiate-accept.md`](./W3-negotiate-accept.md) — `negotiate` / `accept_offer` via `/v1/offers/decide` (E2E verified).
 
-Build the workflow in the HappyRobot UI from the specs; export snapshots to this folder before step 7 publish.
+Build the workflow in the HappyRobot UI from the specs; export snapshots to [`exports/`](./exports/) (see [`exports/README.md`](./exports/README.md)).

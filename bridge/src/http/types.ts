@@ -21,7 +21,17 @@ export type ErrorEnvelope = {
   };
 };
 
+export type RouteOutcomeSnapshot = {
+  endpoint: string;
+  decision?: string;
+  status?: string;
+  error_code?: ApiErrorCode | string;
+};
+
 export type RequestContext = {
   requestId: string;
   hrRunId?: string;
+  startedAtMs: number;
+  tmsMs: number;
+  routeOutcome?: RouteOutcomeSnapshot;
 };

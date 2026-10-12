@@ -1,6 +1,5 @@
 -- Twin schema for inbound carrier sales (D5).
--- Run in the HappyRobot Twin SQL console (step 1, platform track).
--- Dollars are stored as BIGINT whole USD. MAX_BUY is never stored.
+-- Run in the HappyRobot Twin SQL console. Dollars as BIGINT whole USD. MAX_BUY is never stored.
 
 CREATE TABLE IF NOT EXISTS carrier_contacts (
   mc_number   TEXT PRIMARY KEY,
@@ -18,20 +17,23 @@ CREATE TABLE IF NOT EXISTS calls (
   mc_number        TEXT,
   mc_locked        BOOLEAN NOT NULL DEFAULT FALSE,
   carrier_name     TEXT,
-  fmcsa_status     TEXT,
+  dot_number       TEXT,
+  fmcsa_eligible   BOOLEAN,
+  fmcsa_reason     TEXT,
+  fmcsa_status     TEXT,          -- deprecated: not written by Version 2 workflow
   otp_status       TEXT,
   current_load_id  TEXT,
   rounds_used      INT NOT NULL DEFAULT 0,
   standing_offer   BIGINT,
   agreed_rate      BIGINT,
-  loadboard_rate   BIGINT,
+  loadboard_rate   BIGINT,        -- deprecated: not written by Version 2 workflow
   outcome          TEXT NOT NULL DEFAULT 'abandoned',
-  outcome_reason   TEXT,
+  outcome_reason   TEXT,          -- deprecated: not written by Version 2 workflow
   booking_ref      TEXT,
-  handoff_status   TEXT,
-  summary          TEXT,
-  notes            TEXT,
-  run_url          TEXT
+  handoff_status   TEXT,          -- deprecated: not written by Version 2 workflow
+  summary          TEXT,          -- deprecated: not written by Version 2 workflow
+  notes            TEXT,          -- deprecated: not written by Version 2 workflow
+  run_url          TEXT             -- deprecated: not written by Version 2 workflow
 );
 
 CREATE TABLE IF NOT EXISTS otp_challenges (

@@ -58,7 +58,7 @@ describe("decideOfferForWorkflow (fake TMS)", () => {
         warn: (_fields, message) => warnings.push(message),
       },
     );
-    expect(warnings.some((m) => m.includes("loadboard_rate exceeds max_rate"))).toBe(
+    expect(warnings.some((m) => m.includes("loadboard_rate exceeds ceiling"))).toBe(
       true,
     );
   });

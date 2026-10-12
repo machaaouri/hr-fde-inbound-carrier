@@ -157,4 +157,4 @@ Diagnostic round-trip; bypasses fault injection. Echo field is **`MSG`**, not `P
 
 `TMS_HOST`, `TMS_PORT`, `TMS_TOKEN` from env only (candidate portal). Never commit tokens.
 
-Probe results for this repo: `docs/tms-probe-results.json`.
+Probe results for this repo: `docs/archive/tms-probe-results.json` (`make probe-tms`).

@@ -2,7 +2,7 @@
 
 Official API: [QCMobile API](https://mobile.fmcsa.dot.gov/QCDevsite/docs/qcApi) · [API elements](https://mobile.fmcsa.dot.gov/QCDevsite/docs/apiElements). FMCSA does not publish a formal JSON schema; **`docs/fmcsa-fixtures/live-*.json`** are redacted live samples (no webKey).
 
-**Live snapshot (redacted):** [`fmcsa-probe-results.json`](./fmcsa-probe-results.json) — `make probe-fmcsa` from repo root when on **US egress**.
+**Live snapshot (redacted):** [`archive/fmcsa-probe-results.json`](./archive/fmcsa-probe-results.json) — `make probe-fmcsa` from repo root when on **US egress**.
 
 ## Endpoints used by the bridge
 

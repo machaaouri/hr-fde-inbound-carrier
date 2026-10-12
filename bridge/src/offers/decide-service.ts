@@ -202,9 +202,9 @@ async function handleNegotiateOpening(
       {
         load_id: req.load_id,
         loadboard_rate: fetched.pricing.postedRate,
-        max_rate: fetched.pricing.maxBuy,
+        opening_clamped: true,
       },
-      "loadboard_rate exceeds max_rate; opening clamped to max_rate",
+      "loadboard_rate exceeds ceiling; opening clamped",
     );
   }
 

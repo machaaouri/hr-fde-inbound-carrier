@@ -16,10 +16,10 @@ docker-build:
 	docker build -t inbound-carrier-bridge:local ./bridge
 
 probe-tms:
-	cd bridge && npx tsx scripts/tms-probe.ts > ../docs/tms-probe-results.json && cat ../docs/tms-probe-results.json
+	cd bridge && npx tsx scripts/tms-probe.ts > ../docs/archive/tms-probe-results.json && cat ../docs/archive/tms-probe-results.json
 
 probe-fmcsa:
-	cd bridge && npx tsx scripts/fmcsa-probe.ts && cat ../docs/fmcsa-probe-results.json
+	cd bridge && npx tsx scripts/fmcsa-probe.ts && cat ../docs/archive/fmcsa-probe-results.json
 
 dev:
 	cd bridge && npm run dev
