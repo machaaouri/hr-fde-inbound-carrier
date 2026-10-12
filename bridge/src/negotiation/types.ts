@@ -16,7 +16,7 @@ export type DecideOfferInput = {
   pricing: LoadPricing;
   carrierCounter?: number;
   loadAvailable: boolean;
-  /** Last broker quote (Twin standing_offer); required for counter rounds. */
+  /** Last broker quote from negotiation; required for counter rounds. */
   previousBrokerOffer?: number;
 };
 

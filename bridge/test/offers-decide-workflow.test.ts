@@ -5,6 +5,7 @@ import { assertNoSensitivePricingFields } from "../src/offers/decide-response.ts
 import { buildApp } from "../src/server/build-app.ts";
 import { TmsClient } from "../src/tms/client.ts";
 import { FakeTmsServer } from "../src/tms/fake/server.ts";
+import type { OfferHistoryRow } from "../src/twin/workflow-fields.ts";
 
 const TOKEN = "t-decide-workflow";
 const AUTH = "Bearer test-bridge-key-12345678";
@@ -21,21 +22,22 @@ const testConfig: BridgeConfig = {
   fmcsaApiKey: "x",
 };
 
-type TwinBody = Record<string, unknown>;
+type DecideBody = Record<string, unknown>;
 
-function twinPayload(overrides: TwinBody = {}): TwinBody {
+function decidePayload(overrides: DecideBody = {}): DecideBody {
   return {
     action: "negotiate",
     load_id: LOAD,
     carrier_counter: "",
-    otp_status: "passed",
     current_load_id: "",
-    rounds_used: 0,
-    standing_offer: null,
-    agreed_rate: null,
-    outcome: "abandoned",
+    otp_challenge_status: "passed",
+    offers_history: [],
     ...overrides,
   };
+}
+
+function historyRows(rows: OfferHistoryRow[]): OfferHistoryRow[] {
+  return rows;
 }
 
 function expectEnvelope(body: Record<string, unknown>): void {
@@ -73,7 +75,7 @@ describe("POST /v1/offers/decide workflow contract", () => {
       method: "POST",
       url: "/v1/offers/decide",
       headers: { authorization: AUTH },
-      payload: twinPayload(),
+      payload: decidePayload(),
     });
     expect(res.statusCode).toBe(200);
     const body = res.json() as Record<string, unknown>;
@@ -83,22 +85,27 @@ describe("POST /v1/offers/decide workflow contract", () => {
     expect(agent.decision).toBe("OPENING");
     expect(agent.broker_offer).toBe(1950);
     expect(agent.rounds_remaining).toBe(3);
-    expect(calls.current_load_id).toBe(LOAD);
-    expect(calls.rounds_used).toBe(0);
-    expect(calls.standing_offer).toBe(1950);
+    expect(calls).toEqual({ current_load_id: LOAD });
     expect(body.offer).not.toBeNull();
   });
 
-  it("re-pitches standing offer on same load without reset", async () => {
+  it("re-pitches latest broker offer from history on same load", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/offers/decide",
       headers: { authorization: AUTH },
-      payload: twinPayload({
+      payload: decidePayload({
         current_load_id: LOAD,
-        rounds_used: 1,
-        standing_offer: 1775,
         carrier_counter: "",
+        offers_history: historyRows([
+          {
+            load_id: LOAD,
+            round: 1,
+            carrier_counter: 2200,
+            broker_offer: 1775,
+            decision: "COUNTER",
+          },
+        ]),
       }),
     });
     expect(res.statusCode).toBe(200);
@@ -108,30 +115,33 @@ describe("POST /v1/offers/decide workflow contract", () => {
     expect(agent.decision).toBe("COUNTER");
     expect(agent.broker_offer).toBe(1775);
     expect(agent.rounds_remaining).toBe(2);
-    expect(calls.rounds_used).toBe(1);
-    expect(calls.standing_offer).toBe(1775);
+    expect(calls).toEqual({ current_load_id: LOAD });
   });
 
-  it("counter cleans $ and commas and advances rounds_used", async () => {
+  it("counter cleans $ and commas", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/offers/decide",
       headers: { authorization: AUTH },
-      payload: twinPayload({
+      payload: decidePayload({
         current_load_id: LOAD,
-        rounds_used: 0,
-        standing_offer: 1950,
         carrier_counter: "$2,200",
+        offers_history: historyRows([
+          {
+            load_id: LOAD,
+            round: 0,
+            carrier_counter: null,
+            broker_offer: 1950,
+            decision: "OPENING",
+          },
+        ]),
       }),
     });
     expect(res.statusCode).toBe(200);
     const body = res.json() as Record<string, unknown>;
     const agent = body.agent as Record<string, unknown>;
-    const calls = body.calls as Record<string, unknown>;
     expect(agent.decision).toBe("COUNTER");
-    expect(agent.broker_offer as number).toBeLessThanOrEqual(1950);
-    expect(agent.broker_offer as number).toBeGreaterThan(0);
-    expect(calls.rounds_used).toBe(1);
+    expect(agent.broker_offer).toBe(1900);
   });
 
   it("invalid counter format returns INVALID_COUNTER", async () => {
@@ -139,7 +149,7 @@ describe("POST /v1/offers/decide workflow contract", () => {
       method: "POST",
       url: "/v1/offers/decide",
       headers: { authorization: AUTH },
-      payload: twinPayload({ carrier_counter: "not-a-rate" }),
+      payload: decidePayload({ carrier_counter: "not-a-rate" }),
     });
     expect(res.statusCode).toBe(200);
     const agent = (res.json() as { agent: { decision: string } }).agent;
@@ -147,75 +157,94 @@ describe("POST /v1/offers/decide workflow contract", () => {
   });
 
   it("three carrier counters then FINAL_REJECT on the third counter", async () => {
-    let rounds_used = 0;
-    let standing_offer: number | null = null;
-    let current_load_id = "";
+    let offers_history: OfferHistoryRow[] = [];
+    let current_load_id = LOAD;
 
     const open = await app.inject({
       method: "POST",
       url: "/v1/offers/decide",
       headers: { authorization: AUTH },
-      payload: twinPayload(),
+      payload: decidePayload(),
     });
-    const openBody = open.json() as { calls: { standing_offer: number; current_load_id: string } };
-    standing_offer = openBody.calls.standing_offer;
-    current_load_id = openBody.calls.current_load_id;
+    const openBody = open.json() as {
+      agent: { broker_offer: number; decision: string };
+      offer: OfferHistoryRow;
+    };
+    offers_history = [
+      {
+        load_id: LOAD,
+        round: 0,
+        carrier_counter: null,
+        broker_offer: openBody.agent.broker_offer,
+        decision: openBody.agent.decision,
+      },
+    ];
 
-    for (let i = 0; i < 2; i++) {
+    for (let round = 1; round <= 2; round++) {
       const res = await app.inject({
         method: "POST",
         url: "/v1/offers/decide",
         headers: { authorization: AUTH },
-        payload: twinPayload({
+        payload: decidePayload({
           current_load_id,
-          rounds_used,
-          standing_offer,
           carrier_counter: "2200",
+          offers_history,
         }),
       });
       expect(res.statusCode).toBe(200);
       const body = res.json() as {
-        agent: { decision: string };
-        calls: { rounds_used: number; standing_offer: number | null };
+        agent: { decision: string; broker_offer: number | null };
+        offer: OfferHistoryRow;
       };
       expect(body.agent.decision).toBe("COUNTER");
-      rounds_used = body.calls.rounds_used;
-      standing_offer = body.calls.standing_offer;
+      offers_history = [
+        ...offers_history,
+        {
+          load_id: LOAD,
+          round: body.offer.round,
+          carrier_counter: 2200,
+          broker_offer: body.agent.broker_offer,
+          decision: body.agent.decision,
+        },
+      ];
     }
-
-    expect(rounds_used).toBe(2);
 
     const third = await app.inject({
       method: "POST",
       url: "/v1/offers/decide",
       headers: { authorization: AUTH },
-      payload: twinPayload({
+      payload: decidePayload({
         current_load_id,
-        rounds_used,
-        standing_offer,
         carrier_counter: "2200",
+        offers_history,
       }),
     });
     expect(third.statusCode).toBe(200);
     const thirdBody = third.json() as {
       agent: { decision: string };
-      calls: { outcome: string; rounds_used: number };
+      calls: { outcome: string };
     };
     expect(thirdBody.agent.decision).toBe("FINAL_REJECT");
     expect(thirdBody.calls.outcome).toBe("failed_negotiation");
-    expect(thirdBody.calls.rounds_used).toBe(3);
   });
 
-  it("FINAL_REJECT when rounds_used already 3 (no TMS)", async () => {
+  it("FINAL_REJECT when history max round is 3 and carrier counters", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/offers/decide",
       headers: { authorization: AUTH },
-      payload: twinPayload({
+      payload: decidePayload({
         current_load_id: LOAD,
-        rounds_used: 3,
-        standing_offer: 1900,
         carrier_counter: "2000",
+        offers_history: historyRows([
+          {
+            load_id: LOAD,
+            round: 3,
+            carrier_counter: 2200,
+            broker_offer: 1900,
+            decision: "COUNTER",
+          },
+        ]),
       }),
     });
     expect(res.statusCode).toBe(200);
@@ -224,20 +253,25 @@ describe("POST /v1/offers/decide workflow contract", () => {
     const calls = body.calls as Record<string, unknown>;
     expect(agent.decision).toBe("FINAL_REJECT");
     expect(calls.outcome).toBe("failed_negotiation");
-    expect(calls.rounds_used).toBe(3);
   });
 
-  it("accept with standing_offer", async () => {
+  it("accept uses latest broker_offer from history", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/offers/decide",
       headers: { authorization: AUTH },
-      payload: twinPayload({
+      payload: decidePayload({
         action: "accept",
-        load_id: LOAD,
         current_load_id: LOAD,
-        rounds_used: 0,
-        standing_offer: 1950,
+        offers_history: historyRows([
+          {
+            load_id: LOAD,
+            round: 0,
+            carrier_counter: null,
+            broker_offer: 1950,
+            decision: "OPENING",
+          },
+        ]),
       }),
     });
     expect(res.statusCode).toBe(200);
@@ -246,35 +280,37 @@ describe("POST /v1/offers/decide workflow contract", () => {
     const calls = body.calls as Record<string, unknown>;
     expect(agent.decision).toBe("ACCEPT");
     expect(agent.agreed_rate).toBe(1950);
-    expect(calls.agreed_rate).toBe(1950);
-    expect(calls.outcome).toBe("agreed");
-    expect(calls.rounds_used).toBe(0);
+    expect(calls).toEqual({
+      current_load_id: LOAD,
+      agreed_rate: 1950,
+      outcome: "agreed",
+    });
   });
 
-  it("accept without standing_offer → NO_OFFER", async () => {
+  it("accept with empty history ? NO_OFFER", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/offers/decide",
       headers: { authorization: AUTH },
-      payload: twinPayload({
+      payload: decidePayload({
         action: "accept",
-        load_id: LOAD,
         current_load_id: LOAD,
-        standing_offer: "",
+        offers_history: [],
       }),
     });
     expect(res.statusCode).toBe(200);
     const body = res.json() as Record<string, unknown>;
     expect((body.agent as { decision: string }).decision).toBe("NO_OFFER");
     expect(body.offer).toBeNull();
+    expect(body.calls).toEqual({});
   });
 
-  it("NOT_VERIFIED when otp_status is not passed", async () => {
+  it("NOT_VERIFIED when otp_challenge_status is not passed", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/offers/decide",
       headers: { authorization: AUTH },
-      payload: twinPayload({ otp_status: "pending" }),
+      payload: decidePayload({ otp_challenge_status: "pending" }),
     });
     expect(res.statusCode).toBe(200);
     const body = res.json() as Record<string, unknown>;
@@ -282,16 +318,27 @@ describe("POST /v1/offers/decide workflow contract", () => {
     expect(body.offer).toBeNull();
   });
 
-  it("unknown load → 200 LOAD_UNAVAILABLE", async () => {
+  it("unknown load ? 200 LOAD_UNAVAILABLE", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/offers/decide",
       headers: { authorization: AUTH },
-      payload: twinPayload({ load_id: "LD_DOES_NOT_EXIST_999" }),
+      payload: decidePayload({ load_id: "LD_DOES_NOT_EXIST_999" }),
     });
     expect(res.statusCode).toBe(200);
     const body = res.json() as Record<string, unknown>;
     expect((body.agent as { decision: string }).decision).toBe("LOAD_UNAVAILABLE");
     expect(body.offer).toBeNull();
+  });
+
+  it("ignores unknown extra fields on request body", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/offers/decide",
+      headers: { authorization: AUTH },
+      payload: { ...decidePayload(), twin_echo: "ignored" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { agent: { decision: string } }).agent.decision).toBe("OPENING");
   });
 });

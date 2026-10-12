@@ -34,20 +34,38 @@ describe("parseTwinDollarField", () => {
 });
 
 describe("parseDecideWorkflowInput", () => {
-  it("normalizes twin defaults", () => {
+  it("normalizes v3 defaults", () => {
     const body = parseDecideWorkflowInput({
       action: "negotiate",
       load_id: "LD1",
       carrier_counter: "",
-      otp_status: "passed",
+      otp_challenge_status: "passed",
       current_load_id: "",
-      rounds_used: null,
-      standing_offer: "",
-      outcome: "",
     });
-    expect(body.rounds_used).toBe(0);
-    expect(body.outcome).toBe("abandoned");
-    expect(body.standing_offer).toBeNull();
+    expect(body.max_round).toBe(0);
+    expect(body.latest_broker_offer).toBeNull();
+    expect(body.offers_history).toEqual([]);
+  });
+
+  it("derives max_round from offers_history", () => {
+    const body = parseDecideWorkflowInput({
+      action: "negotiate",
+      load_id: "LD1",
+      current_load_id: "LD1",
+      carrier_counter: "1800",
+      otp_challenge_status: "passed",
+      offers_history: [
+        {
+          load_id: "LD1",
+          round: 1,
+          carrier_counter: 2000,
+          broker_offer: 1775,
+          decision: "COUNTER",
+        },
+      ],
+    });
+    expect(body.max_round).toBe(1);
+    expect(body.latest_broker_offer).toBe(1775);
   });
 
   it("decideLogRound for counter on same load", () => {
@@ -55,9 +73,11 @@ describe("parseDecideWorkflowInput", () => {
       action: "negotiate",
       load_id: "LD1",
       current_load_id: "LD1",
-      rounds_used: 1,
       carrier_counter: "1800",
-      otp_status: "passed",
+      otp_challenge_status: "passed",
+      offers_history: [
+        { load_id: "LD1", round: 1, broker_offer: 1775, decision: "COUNTER" },
+      ],
     });
     expect(decideLogRound(req, parseCarrierCounterRaw("1800"))).toBe(2);
   });

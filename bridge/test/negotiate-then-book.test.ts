@@ -53,12 +53,9 @@ describe("negotiate → accept → book (PENDING LOAD_BOOK wire)", () => {
         action: "negotiate",
         load_id: LOAD,
         carrier_counter: "",
-        otp_status: "passed",
+        otp_challenge_status: "passed",
         current_load_id: "",
-        rounds_used: 0,
-        standing_offer: null,
-        agreed_rate: null,
-        outcome: "agreed",
+        offers_history: [],
       },
     });
     expect(opening.statusCode).toBe(200);
@@ -72,12 +69,17 @@ describe("negotiate → accept → book (PENDING LOAD_BOOK wire)", () => {
         action: "accept",
         load_id: LOAD,
         carrier_counter: "",
-        otp_status: "passed",
+        otp_challenge_status: "passed",
         current_load_id: LOAD,
-        rounds_used: 1,
-        standing_offer: brokerOffer,
-        agreed_rate: null,
-        outcome: "agreed",
+        offers_history: [
+          {
+            load_id: LOAD,
+            round: 0,
+            carrier_counter: null,
+            broker_offer: brokerOffer,
+            decision: "OPENING",
+          },
+        ],
       },
     });
     expect(accept.statusCode).toBe(200);
@@ -92,8 +94,7 @@ describe("negotiate → accept → book (PENDING LOAD_BOOK wire)", () => {
         mc_number: "136818",
         agreed_rate: brokerOffer,
         run_id: "neg-book-1",
-        otp_status: "passed",
-        outcome: "agreed",
+        otp_challenge_status: "passed",
       },
     });
     expect(book.statusCode).toBe(200);

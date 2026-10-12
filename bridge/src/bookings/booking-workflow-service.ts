@@ -5,10 +5,7 @@ import type { BookingWorkflowRequest, BookingWorkflowResponse } from "./booking-
 import { executeBookingOnTms } from "./create-booking-service.ts";
 
 function gateNotReady(req: BookingWorkflowRequest): boolean {
-  if (req.otp_status !== "passed") {
-    return true;
-  }
-  if (req.outcome !== "agreed") {
+  if (req.otp_challenge_status !== "passed") {
     return true;
   }
   if (req.agreed_rate === null) {
@@ -23,7 +20,7 @@ export async function bookingForWorkflow(
   req: BookingWorkflowRequest,
 ): Promise<BookingWorkflowResponse> {
   if (gateNotReady(req)) {
-    return buildBookingWorkflowResponse("NOT_READY", req.outcome);
+    return buildBookingWorkflowResponse("NOT_READY");
   }
 
   const result = await executeBookingOnTms(
@@ -34,5 +31,5 @@ export async function bookingForWorkflow(
     req.agreed_rate!,
   );
 
-  return buildBookingWorkflowResponse(result.status, req.outcome, result.booking_ref);
+  return buildBookingWorkflowResponse(result.status, result.booking_ref);
 }

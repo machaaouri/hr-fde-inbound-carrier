@@ -11,7 +11,7 @@ This document records implementer decisions for the inbound carrier sales PoC. S
   - `POST /v1/carriers/verify` — `{ mc_number }` → `{ eligible, carrier_name?, dot_number?, reason, contact_email? }`. `contact_email` only when FMCSA returns one; workflow hides it from the agent.
   - `POST /v1/loads/search` — lane/equipment filters → up to 3 loads with **safe fields only** (includes **`loadboard_rate`** from TMS `RATE`; never ceiling / `MAX_BUY`).
   - `POST /v1/offers/decide` — workflow-owned negotiation: Twin `calls` in, `{ agent, calls, offer }` out; never exposes `MAX_BUY`. See [`offers-decide-workflow.md`](./offers-decide-workflow.md).
-  - `POST /v1/bookings` — Twin gates + book: `{ load_id, mc_number, agreed_rate, run_id, otp_status, outcome }` → `{ agent, calls }` on **200** (see [`bookings-workflow.md`](./bookings-workflow.md)).
+  - `POST /v1/bookings` — Twin gates + book: `{ load_id, mc_number, agreed_rate, run_id, otp_challenge_status }` → `{ agent, calls }` on **200** (see [`bookings-workflow.md`](./bookings-workflow.md)).
 - **Errors:** envelope `{ error: { code, message, retryable, request_id } }`. Codes: `UNAUTHORIZED`, `VALIDATION_ERROR`, `RATE_LIMITED`, `LOAD_NOT_FOUND`, `LOAD_UNAVAILABLE`, `RATE_NOT_ACCEPTABLE`, `CEILING_UNAVAILABLE`, `TMS_UNAVAILABLE`, `TMS_BAD_RESPONSE`, `FMCSA_UNAVAILABLE`, `FMCSA_MISCONFIGURED`, `INTERNAL`. TMS codes are mapped, never passed through.
 - **Contract:** frozen in `bridge/openapi.yaml` (step 1). Contract tests enforce it (step 6).
 
@@ -19,21 +19,21 @@ This document records implementer decisions for the inbound carrier sales PoC. S
 
 Pure functions in `bridge/src/negotiation/policy.ts`, unit-tested. Detail: [`negotiation-pricing.md`](./negotiation-pricing.md).
 
-**Phase 1 inputs:** `POST /v1/offers/decide` accepts optional **`offers_history`** (Twin `offers` rows) and **`otp_challenge_status`** (Twin `otp_challenges.status`). When present, the bridge derives `rounds_used` / negotiation standing from history and verifies accept against the latest `broker_offer` for the load. Legacy **`rounds_used`**, **`standing_offer`**, and **`otp_status`** still work for Version 2; source fields win on conflict (warn logged). Shared parsing: `bridge/src/twin/workflow-fields.ts`.
+**Workflow inputs:** `POST /v1/offers/decide` takes **`offers_history`** (Twin `offers` rows) and **`otp_challenge_status`**. The bridge derives max negotiation round and latest `broker_offer` per load from history; **accept** uses that quote only. Shared parsing: `bridge/src/twin/workflow-fields.ts`.
 
 - **Opening** = TMS posted **loadboard_rate** (`RATE`). If `RATE > MAX_BUY`, open at **max_rate** and log a warning (no ceiling value in logs).
-- **Counter ≤ last broker quote** (`standing_offer`) → **ACCEPT** at the carrier’s number.
+- **Counter ≤ last broker quote** (from history) → **ACCEPT** at the carrier’s number.
 - **Close gap** and **counter** rules — see negotiation-pricing.md.
-- **Up to 3 counter rounds** (`rounds_used` 0..3 on Twin); no deal after round 3 → **FINAL_REJECT**.
+- **Up to 3 counter rounds** (max `round` 0..3 in history); no deal after round 3 → **FINAL_REJECT**.
 - **max_rate** (`MAX_BUY`) is used only inside the bridge; HTTP/JSON and logs never expose it.
 - **`accept`** (`action: accept`) does not consume a counter round.
-- Invalid counter format → **INVALID_COUNTER** (still advances `rounds_used` when a counter was attempted).
+- Invalid counter format → **INVALID_COUNTER** (still advances counter round when a counter was attempted).
 
 ## D3. Round limit
 
-- **Round limit:** Bridge enforces **3 counter rounds** from **`rounds_used`** (legacy `calls` copy or max `round` in **`offers_history`** for the load); returns updated `calls.rounds_used` and `FINAL_REJECT` when exhausted. Workflow **does not** gate rounds with Conditions — it mirrors Twin from `response.calls`.
-- **Fixed tool parameters:** `run_id = @current.run_id`; agent supplies only `carrier_counter` on negotiate (raw string). MC, rounds, standing offer, and load id for accept come from Twin + fixed webhook mapping.
-- **MC change / OTP:** Version 2 workflow does **not** reset Twin OTP state when a new MC is verified mid-call; operators rely on workflow design and Twin writes. **`mc_locked`** on `POST /v1/otp/verify` is returned for the workflow to persist on `calls`; the bridge does not read Twin.
+- **Round limit:** Bridge enforces **3 counter rounds** from max **`round`** in **`offers_history`** for the load; returns `FINAL_REJECT` when exhausted. Workflow **does not** gate rounds with Conditions — it mirrors Twin from `response.calls` and appends `offers` rows.
+- **Fixed tool parameters:** `run_id = @current.run_id`; agent supplies only `carrier_counter` on negotiate (raw string). MC, history, and load id for accept come from Twin + fixed webhook mapping.
+- **MC change / OTP:** Workflow design and Twin writes govern mid-call MC changes; the bridge only sees `otp_challenge_status` on decide/book.
 - **Booking backstop:** ceiling re-check at `POST /v1/bookings` (stateless, no Twin credentials).
 
 Rejected alternative: HMAC negotiation tokens (still needs Twin for replay).
@@ -82,7 +82,7 @@ Views: `v_kpi_summary` (§7 KPIs), `v_followups` (rep queue and failures). SQL i
 
 - After FMCSA pass: contact from Twin seed first, then FMCSA email if `OTP_FMCSA_FALLBACK=on` (production only). Workflow resolves email via Read Twin before calling the bridge.
 - **`POST /v1/otp/send`** — bridge generates 6-digit code, salt, SHA-256 hash, expiry; returns fields for **Write Twin** (`otp_challenges`) and a hidden **`otp_code`** for **Send Email** (To = email from Twin, fixed in workflow).
-- **`POST /v1/otp/verify`** — workflow Read Twin passes hash/salt/expiry/attempts + caller code; bridge verifies; response includes **`mc_locked: true`** on success for the workflow to **Write Twin** on `calls` (`mc_locked`, `otp_status`). Bridge does not connect to Twin.
+- **`POST /v1/otp/verify`** — workflow Read Twin passes hash/salt/expiry/attempts + caller code; bridge verifies; response is `{ result, attempts, attempts_left }`. Bridge does not connect to Twin.
 - Limits: 5 min TTL, max 3 verify attempts, max 2 resends (resend replaces challenge). Constant-time compare in `bridge/src/otp/`.
 - Residual risk: `otp_code` visible in run details (webhook + email node inputs) to platform users with run access—not in agent context.
 

@@ -59,7 +59,7 @@ describe("verifyOtp", () => {
       attempts: 0,
     });
     expect(out.result).toBe("passed");
-    expect(out.mc_locked).toBe(true);
+    expect(Object.keys(out).sort()).toEqual(["attempts", "attempts_left", "result"]);
   });
 
   it("increments attempts on wrong code", () => {

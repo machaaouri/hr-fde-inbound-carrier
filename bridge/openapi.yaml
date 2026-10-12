@@ -440,17 +440,12 @@ components:
           oneOf:
             - type: string
             - type: "null"
-          description: Raw agent text; empty means opening on negotiate
-        otp_status:
-          oneOf:
-            - type: string
-            - type: "null"
-          description: Legacy Twin calls.otp_status copy (deprecated when otp_challenge_status or offers_history is sent).
+          description: Raw agent text; empty string means opening on negotiate
         otp_challenge_status:
           oneOf:
             - type: string
             - type: "null"
-          description: Preferred verification gate — Twin otp_challenges.status (e.g. passed).
+          description: Twin otp_challenges.status (e.g. passed); required for TMS paths
         offers_history:
           oneOf:
             - type: array
@@ -458,35 +453,12 @@ components:
                 $ref: "#/components/schemas/OfferHistoryRow"
             - type: string
             - type: "null"
-          description: Preferred negotiation state — Twin offers rows for this run (JSON array or JSON string).
+          description: Twin offers rows for this run (JSON array or JSON string); may be []
         current_load_id:
           oneOf:
             - type: string
             - type: "null"
-        rounds_used:
-          oneOf:
-            - type: integer
-            - type: "null"
-          minimum: 0
-          maximum: 3
-          description: Legacy Twin calls.rounds_used copy (deprecated when offers_history is sent).
-        standing_offer:
-          oneOf:
-            - type: integer
-            - type: string
-            - type: "null"
-          description: Legacy Twin calls.standing_offer copy; on accept, the price the carrier accepts.
-        agreed_rate:
-          oneOf:
-            - type: integer
-            - type: string
-            - type: "null"
-          description: Legacy Twin calls.agreed_rate echo (deprecated; bridge returns updated value in response).
-        outcome:
-          oneOf:
-            - type: string
-            - type: "null"
-          description: Legacy Twin calls.outcome echo (deprecated; bridge returns updated value when decision sets it).
+          description: Active negotiation load from Twin; empty string if none
 
     OfferHistoryRow:
       type: object
@@ -539,30 +511,15 @@ components:
 
     DecideCallsPatch:
       type: object
-      required:
-        [current_load_id, rounds_used, standing_offer, agreed_rate, outcome]
+      description: Fields to merge into Twin calls; only keys present when changed this request
       properties:
         current_load_id:
           type: string
-        rounds_used:
-          type: integer
-          minimum: 0
-          maximum: 3
-          deprecated: true
-          description: Deprecated Twin mirror; workflow may stop writing after Phase 2.
-        standing_offer:
-          type: integer
-          nullable: true
-          deprecated: true
         agreed_rate:
           type: integer
-          nullable: true
-          deprecated: true
-          description: Echo field; not authoritative on request.
         outcome:
           type: string
-          deprecated: true
-          description: Echo field; bridge sets outcome on accept/reject paths.
+          description: agreed or failed_negotiation when set by this decision
 
     DecideOfferLog:
       type: object
@@ -596,7 +553,7 @@ components:
 
     CreateBookingRequest:
       type: object
-      required: [load_id, mc_number, agreed_rate, run_id, outcome]
+      required: [load_id, mc_number, agreed_rate, run_id, otp_challenge_status]
       properties:
         load_id:
           type: string
@@ -608,15 +565,9 @@ components:
             - type: string
         run_id:
           type: string
-        otp_status:
-          type: string
-          description: Legacy Twin calls.otp_status (deprecated when otp_challenge_status is sent).
         otp_challenge_status:
           type: string
-          description: Preferred — Twin otp_challenges.status (must be passed for TMS book).
-        outcome:
-          type: string
-          description: Twin calls.outcome (must be agreed for TMS book)
+          description: Twin otp_challenges.status (must be passed for TMS book)
 
     AgentBookingStatus:
       type: string
@@ -642,13 +593,13 @@ components:
               type: ["string", "null"]
         calls:
           type: object
-          required: [booking_ref, outcome]
+          description: Patch for Twin calls; empty when nothing changed
           properties:
             booking_ref:
-              type: ["string", "null"]
+              type: string
             outcome:
               type: string
-              description: booked on success; otherwise unchanged from request
+              description: booked when TMS book succeeded
 
     SendOtpRequest:
       type: object
@@ -732,7 +683,7 @@ components:
 
     VerifyOtpResponse:
       type: object
-      required: [result, attempts, attempts_left, mc_locked]
+      required: [result, attempts, attempts_left]
       properties:
         result:
           $ref: "#/components/schemas/OtpVerifyResult"
@@ -742,10 +693,6 @@ components:
         attempts_left:
           type: integer
           minimum: 0
-        mc_locked:
-          type: boolean
-          deprecated: true
-          description: Deprecated Twin mirror hint; workflow writes calls.mc_locked from result=passed.
 
 security:
   - bearerAuth: []

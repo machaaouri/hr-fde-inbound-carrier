@@ -12,8 +12,12 @@ export type BookingWorkflowRequest = {
   mc_number: string;
   agreed_rate: number | null;
   run_id: string;
-  otp_status: string;
-  outcome: string;
+  otp_challenge_status: string;
+};
+
+export type BookingCallsPatch = {
+  booking_ref?: string;
+  outcome?: string;
 };
 
 export type BookingWorkflowResponse = {
@@ -21,10 +25,7 @@ export type BookingWorkflowResponse = {
     status: AgentBookingStatus;
     booking_ref: string | null;
   };
-  calls: {
-    booking_ref: string | null;
-    outcome: string;
-  };
+  calls: BookingCallsPatch;
 };
 
 export type BookingExecutionResult = {

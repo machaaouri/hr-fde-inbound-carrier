@@ -43,5 +43,4 @@ export type VerifyOtpOutput = {
   result: VerifyOtpResult;
   attempts: number;
   attempts_left: number;
-  mc_locked: boolean;
 };

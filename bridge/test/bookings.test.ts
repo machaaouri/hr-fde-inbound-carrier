@@ -28,8 +28,7 @@ function readyPayload(overrides: Record<string, unknown> = {}): Record<string, u
     mc_number: "136818",
     agreed_rate: 1900,
     run_id: "run-book-1",
-    otp_status: "passed",
-    outcome: "agreed",
+    otp_challenge_status: "passed",
     ...overrides,
   };
 }
@@ -71,29 +70,18 @@ describe("POST /v1/bookings workflow", () => {
     expect(res.json().error.code).toBe("TMS_UNAVAILABLE");
   });
 
-  it("NOT_READY when otp not passed", async () => {
+  it("NOT_READY when otp_challenge_status is not passed", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/bookings",
       headers: { authorization: AUTH },
-      payload: readyPayload({ otp_status: "pending" }),
+      payload: readyPayload({ otp_challenge_status: "pending" }),
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       agent: { status: "NOT_READY", booking_ref: null },
-      calls: { booking_ref: null, outcome: "agreed" },
+      calls: {},
     });
-  });
-
-  it("NOT_READY when outcome is not agreed", async () => {
-    const res = await app.inject({
-      method: "POST",
-      url: "/v1/bookings",
-      headers: { authorization: AUTH },
-      payload: readyPayload({ outcome: "failed_negotiation" }),
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().agent.status).toBe("NOT_READY");
   });
 
   it("NOT_READY when agreed_rate empty string", async () => {
@@ -102,6 +90,25 @@ describe("POST /v1/bookings workflow", () => {
       url: "/v1/bookings",
       headers: { authorization: AUTH },
       payload: readyPayload({ agreed_rate: "" }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      agent: { status: "NOT_READY", booking_ref: null },
+      calls: {},
+    });
+  });
+
+  it("NOT_READY when otp_challenge_status passed but agreed_rate missing", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/bookings",
+      headers: { authorization: AUTH },
+      payload: {
+        load_id: OPEN_LOAD,
+        mc_number: "136818",
+        run_id: "run-book-1",
+        otp_challenge_status: "passed",
+      },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().agent.status).toBe("NOT_READY");
@@ -117,7 +124,7 @@ describe("POST /v1/bookings workflow", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       agent: { status: "RATE_NOT_ACCEPTABLE", booking_ref: null },
-      calls: { booking_ref: null, outcome: "agreed" },
+      calls: {},
     });
   });
 
@@ -131,7 +138,7 @@ describe("POST /v1/bookings workflow", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       agent: { status: "LOAD_UNAVAILABLE", booking_ref: null },
-      calls: { booking_ref: null, outcome: "agreed" },
+      calls: {},
     });
   });
 

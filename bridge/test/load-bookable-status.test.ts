@@ -77,12 +77,9 @@ describe("PENDING load LD000009923 across search / decide / book", () => {
         action: "negotiate",
         load_id: PENDING_LOAD,
         carrier_counter: "",
-        otp_status: "passed",
+        otp_challenge_status: "passed",
         current_load_id: "",
-        rounds_used: 0,
-        standing_offer: null,
-        agreed_rate: null,
-        outcome: "agreed",
+        offers_history: [],
       },
     });
     expect(res.statusCode).toBe(200);
@@ -99,8 +96,7 @@ describe("PENDING load LD000009923 across search / decide / book", () => {
         mc_number: "136818",
         agreed_rate: 750,
         run_id: "run-pending",
-        otp_status: "passed",
-        outcome: "agreed",
+        otp_challenge_status: "passed",
       },
     });
     expect(res.statusCode).toBe(200);

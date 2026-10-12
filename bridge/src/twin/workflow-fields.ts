@@ -9,16 +9,10 @@ export type OfferHistoryRow = {
 };
 
 export type DerivedNegotiationState = {
-  rounds_used: number;
-  standing_offer: number | null;
+  max_round: number;
   latest_broker_offer: number | null;
 };
 
-export type WorkflowInputStyle = "legacy" | "source";
-
-/**
- * Twin nullable dollar fields → whole USD or null (unparsable / empty string).
- */
 export function parseTwinDollarField(raw: unknown): number | null {
   if (raw === null || raw === undefined) {
     return null;
@@ -64,11 +58,6 @@ export function parseTwinIntField(raw: unknown, fallback = 0): number {
   return fallback;
 }
 
-export function defaultOutcome(raw: unknown): string {
-  const trimmed = typeof raw === "string" ? raw.trim() : "";
-  return trimmed === "" ? "abandoned" : trimmed;
-}
-
 export function sameNegotiationLoad(
   loadId: string,
   currentLoadId: string,
@@ -82,7 +71,7 @@ export function sameNegotiationLoad(
 
 export function parseOffersHistoryRaw(raw: unknown): OfferHistoryRow[] | null {
   if (raw === null || raw === undefined) {
-    return null;
+    return [];
   }
   let value: unknown = raw;
   if (typeof raw === "string") {
@@ -127,92 +116,26 @@ export function deriveNegotiationFromHistory(
 ): DerivedNegotiationState {
   const forLoad = rows.filter((r) => r.load_id === loadId);
   if (forLoad.length === 0) {
-    return {
-      rounds_used: 0,
-      standing_offer: null,
-      latest_broker_offer: null,
-    };
+    return { max_round: 0, latest_broker_offer: null };
   }
-  let rounds_used = 0;
+  let max_round = 0;
   for (const row of forLoad) {
-    if (row.round > rounds_used) {
-      rounds_used = row.round;
+    if (row.round > max_round) {
+      max_round = row.round;
     }
   }
-  let standing_offer: number | null = null;
+  let latest_broker_offer: number | null = null;
   for (const row of forLoad) {
     if (row.broker_offer !== null) {
-      standing_offer = row.broker_offer;
+      latest_broker_offer = row.broker_offer;
     }
   }
-  return {
-    rounds_used,
-    standing_offer,
-    latest_broker_offer: standing_offer,
-  };
+  return { max_round, latest_broker_offer };
 }
 
-export type VerificationResolution = {
-  otp_status: string;
-  usedChallengeStatus: boolean;
-};
-
-/** `otp_challenge_status` (Twin otp_challenges.status) wins over `otp_status` when present. */
-export function resolveVerificationStatus(
-  otpStatusRaw: unknown,
-  otpChallengeStatusRaw: unknown,
-): VerificationResolution {
-  const challengePresent =
-    otpChallengeStatusRaw !== null &&
-    otpChallengeStatusRaw !== undefined &&
-    !(
-      typeof otpChallengeStatusRaw === "string" &&
-      otpChallengeStatusRaw.trim() === ""
-    );
-  if (challengePresent) {
-    const status =
-      typeof otpChallengeStatusRaw === "string"
-        ? otpChallengeStatusRaw.trim()
-        : String(otpChallengeStatusRaw);
-    return { otp_status: status, usedChallengeStatus: true };
+export function normalizeChallengeStatus(raw: unknown): string {
+  if (raw === null || raw === undefined) {
+    return "";
   }
-  const legacy = typeof otpStatusRaw === "string" ? otpStatusRaw.trim() : "";
-  return {
-    otp_status: legacy === "" ? "pending" : legacy,
-    usedChallengeStatus: false,
-  };
-}
-
-export function negotiationFieldDisagreements(
-  legacy: { rounds_used: number; standing_offer: number | null },
-  derived: DerivedNegotiationState,
-): string[] {
-  const disagreements: string[] = [];
-  if (legacy.rounds_used !== derived.rounds_used) {
-    disagreements.push("rounds_used");
-  }
-  const legacyStanding = legacy.standing_offer;
-  const derivedStanding = derived.standing_offer;
-  if (legacyStanding !== derivedStanding) {
-    disagreements.push("standing_offer");
-  }
-  if (disagreements.length > 0) {
-    return disagreements;
-  }
-  return [];
-}
-
-export function verificationFieldDisagreements(
-  legacyOtpStatus: string,
-  resolvedOtpStatus: string,
-  usedChallengeStatus: boolean,
-): string[] {
-  if (!usedChallengeStatus) {
-    return [];
-  }
-  const legacyNorm = legacyOtpStatus.trim() === "" ? "pending" : legacyOtpStatus.trim();
-  if (legacyNorm !== resolvedOtpStatus) {
-    return ["otp_status", "otp_challenge_status"];
-  }
-  return [];
+  return typeof raw === "string" ? raw.trim() : String(raw).trim();
 }

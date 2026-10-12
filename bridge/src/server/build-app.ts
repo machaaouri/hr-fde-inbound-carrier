@@ -165,23 +165,13 @@ export async function buildApp(
   app.post("/v1/offers/decide", async (req) => {
     requireAuth(req.headers.authorization);
     const parsed = parseDecideWorkflowInput(req.body);
-    const result = await decideOfferForWorkflow(
-      tms,
-      config,
-      parsed,
-      {
-        warn: (fields, message) => req.log.warn(fields, message),
-      },
-      {
-        precedenceWarnings: parsed.precedenceWarnings,
-        inputStyle: parsed.inputStyle,
-      },
-    );
+    const result = await decideOfferForWorkflow(tms, config, parsed, {
+      warn: (fields, message) => req.log.warn(fields, message),
+    });
     setRouteOutcome(req, {
       endpoint: "offers/decide",
       decision: result.agent.decision,
       status: parsed.action,
-      input_style: parsed.inputStyle,
     });
     return result;
   });
@@ -189,17 +179,10 @@ export async function buildApp(
   app.post("/v1/bookings", async (req) => {
     requireAuth(req.headers.authorization);
     const parsed = parseBookingWorkflowInput(req.body);
-    if (parsed.precedenceWarnings.length > 0) {
-      req.log.warn(
-        { fields: parsed.precedenceWarnings, input_style: parsed.inputStyle },
-        "workflow input precedence: source fields override legacy copies",
-      );
-    }
     const result = await bookingForWorkflow(tms, config, parsed);
     setRouteOutcome(req, {
       endpoint: "bookings/create",
       status: result.agent.status,
-      input_style: parsed.inputStyle,
     });
     return result;
   });

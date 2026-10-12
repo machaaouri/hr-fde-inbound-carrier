@@ -27,9 +27,6 @@ export function logRouteOutcome(log: FastifyBaseLogger, req: FastifyRequest): vo
   if (outcome.error_code !== undefined) {
     payload.error_code = outcome.error_code;
   }
-  if (outcome.input_style !== undefined) {
-    payload.input_style = outcome.input_style;
-  }
   if (tms_ms > 0) {
     payload.tms_ms = tms_ms;
   }

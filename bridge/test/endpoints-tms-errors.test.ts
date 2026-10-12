@@ -50,12 +50,9 @@ describe("TMS error handling (process survives)", () => {
     action: "negotiate",
     load_id: "LD0000045821",
     carrier_counter: "",
-    otp_status: "passed",
+    otp_challenge_status: "passed",
     current_load_id: "",
-    rounds_used: 0,
-    standing_offer: null,
-    agreed_rate: null,
-    outcome: "abandoned",
+    offers_history: [],
     ...overrides,
   });
 

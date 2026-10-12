@@ -1,5 +1,6 @@
 import type {
   AgentOfferDecision,
+  DecideCallsPatch,
   DecideOfferLog,
   DecideWorkflowResponse,
 } from "./decide-types.ts";
@@ -16,12 +17,8 @@ type BuildParams = {
   broker_offer: number | null;
   agreed_rate: number | null;
   rounds_remaining: number;
-  current_load_id: string;
-  rounds_used: number;
-  standing_offer: number | null;
-  calls_agreed_rate: number | null;
-  outcome: string;
   offer: DecideOfferLog | null;
+  calls: DecideCallsPatch;
 };
 
 export function buildDecideWorkflowResponse(p: BuildParams): DecideWorkflowResponse {
@@ -32,13 +29,7 @@ export function buildDecideWorkflowResponse(p: BuildParams): DecideWorkflowRespo
       agreed_rate: p.agreed_rate,
       rounds_remaining: p.rounds_remaining,
     },
-    calls: {
-      current_load_id: p.current_load_id,
-      rounds_used: p.rounds_used,
-      standing_offer: p.standing_offer,
-      agreed_rate: p.calls_agreed_rate,
-      outcome: p.outcome,
-    },
+    calls: p.calls,
     offer: p.offer,
   };
 }

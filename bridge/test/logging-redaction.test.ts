@@ -61,12 +61,9 @@ describe("logging redaction", () => {
         action: "negotiate",
         load_id: INVERTED_LOAD,
         carrier_counter: "",
-        otp_status: "passed",
+        otp_challenge_status: "passed",
         current_load_id: "",
-        rounds_used: 0,
-        standing_offer: null,
-        agreed_rate: null,
-        outcome: "agreed",
+        offers_history: [],
       },
     });
     expect(res.statusCode).toBe(200);

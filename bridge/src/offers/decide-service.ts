@@ -11,27 +11,19 @@ import {
   buildDecideWorkflowResponse,
   roundsRemainingFromUsed,
 } from "./decide-response.ts";
-import type { DecideWorkflowRequest, DecideWorkflowResponse } from "./decide-types.ts";
+import type { DecideCallsPatch, DecideWorkflowRequest, DecideWorkflowResponse } from "./decide-types.ts";
 import { isBookableLoad } from "../loads/tms-record.ts";
 import { fetchLoadRecord } from "../tms/fetch-load-record.ts";
 import { parseLoadPricingFromRecord } from "./load-pricing.ts";
 import { parseCarrierCounterRaw } from "./parse-carrier-counter.ts";
-import {
-  standingOfferMatchesHistoryQuote,
-  standingOfferMatchesLastBrokerQuote,
-} from "./standing-offer.ts";
-import type { ParsedDecideWorkflow } from "./parse-decide-body.ts";
+import { sameNegotiationLoad } from "../twin/workflow-fields.ts";
 
 function sameLoad(req: DecideWorkflowRequest): boolean {
-  return (
-    req.load_id !== "" &&
-    req.current_load_id !== "" &&
-    req.load_id === req.current_load_id
-  );
+  return sameNegotiationLoad(req.load_id, req.current_load_id);
 }
 
-function baseRoundsUsed(req: DecideWorkflowRequest): number {
-  return sameLoad(req) ? req.rounds_used : 0;
+function baseMaxRound(req: DecideWorkflowRequest): number {
+  return sameLoad(req) ? req.max_round : 0;
 }
 
 async function fetchPricingForDecide(
@@ -61,18 +53,16 @@ async function fetchPricingForDecide(
   }
 }
 
-function unavailableResponse(req: DecideWorkflowRequest): DecideWorkflowResponse {
+function unavailableResponse(
+  req: DecideWorkflowRequest,
+): DecideWorkflowResponse {
   return buildDecideWorkflowResponse({
     decision: "LOAD_UNAVAILABLE",
     broker_offer: null,
     agreed_rate: null,
-    rounds_remaining: roundsRemainingFromUsed(req.rounds_used),
-    current_load_id: req.current_load_id,
-    rounds_used: req.rounds_used,
-    standing_offer: req.standing_offer,
-    calls_agreed_rate: req.agreed_rate,
-    outcome: req.outcome,
+    rounds_remaining: roundsRemainingFromUsed(req.max_round),
     offer: null,
+    calls: {},
   });
 }
 
@@ -81,13 +71,9 @@ function gateNotVerified(req: DecideWorkflowRequest): DecideWorkflowResponse {
     decision: "NOT_VERIFIED",
     broker_offer: null,
     agreed_rate: null,
-    rounds_remaining: roundsRemainingFromUsed(req.rounds_used),
-    current_load_id: req.current_load_id,
-    rounds_used: req.rounds_used,
-    standing_offer: req.standing_offer,
-    calls_agreed_rate: req.agreed_rate,
-    outcome: req.outcome,
+    rounds_remaining: roundsRemainingFromUsed(req.max_round),
     offer: null,
+    calls: {},
   });
 }
 
@@ -96,13 +82,9 @@ function gateNoOffer(req: DecideWorkflowRequest): DecideWorkflowResponse {
     decision: "NO_OFFER",
     broker_offer: null,
     agreed_rate: null,
-    rounds_remaining: roundsRemainingFromUsed(req.rounds_used),
-    current_load_id: req.current_load_id,
-    rounds_used: req.rounds_used,
-    standing_offer: req.standing_offer,
-    calls_agreed_rate: req.agreed_rate,
-    outcome: req.outcome,
+    rounds_remaining: roundsRemainingFromUsed(req.max_round),
     offer: null,
+    calls: {},
   });
 }
 
@@ -111,8 +93,8 @@ async function handleAccept(
   config: BridgeConfig,
   req: DecideWorkflowRequest,
 ): Promise<DecideWorkflowResponse> {
-  const standing = req.standing_offer;
-  if (standing === null) {
+  const price = req.latest_broker_offer;
+  if (price === null) {
     return gateNoOffer(req);
   }
 
@@ -121,49 +103,33 @@ async function handleAccept(
     return unavailableResponse(req);
   }
 
-  if (standing > fetched.pricing.maxBuy) {
+  if (price > fetched.pricing.maxBuy) {
     throw new BridgeError(
       "RATE_NOT_ACCEPTABLE",
-      "Standing offer exceeds allowable rate",
-      422,
-    );
-  }
-  const quoteOk = req.acceptFromHistory
-    ? standingOfferMatchesHistoryQuote(
-        standing,
-        req.latest_broker_offer,
-        fetched.pricing.maxBuy,
-      )
-    : standingOfferMatchesLastBrokerQuote(
-        fetched.pricing,
-        req.rounds_used,
-        standing,
-      );
-  if (!quoteOk) {
-    throw new BridgeError(
-      "RATE_NOT_ACCEPTABLE",
-      "Standing offer does not match the last broker offer",
+      "Broker offer exceeds allowable rate",
       422,
     );
   }
 
+  const calls: DecideCallsPatch = {
+    current_load_id: req.load_id,
+    agreed_rate: price,
+    outcome: "agreed",
+  };
+
   return buildDecideWorkflowResponse({
     decision: "ACCEPT",
     broker_offer: null,
-    agreed_rate: standing,
-    rounds_remaining: roundsRemainingFromUsed(req.rounds_used),
-    current_load_id: req.load_id,
-    rounds_used: req.rounds_used,
-    standing_offer: standing,
-    calls_agreed_rate: standing,
-    outcome: "agreed",
+    agreed_rate: price,
+    rounds_remaining: roundsRemainingFromUsed(req.max_round),
     offer: {
       load_id: req.load_id,
-      round: req.rounds_used,
+      round: req.max_round,
       carrier_counter: null,
       broker_offer: null,
       decision: "ACCEPT",
     },
+    calls,
   });
 }
 
@@ -177,33 +143,28 @@ async function handleNegotiateOpening(
   req: DecideWorkflowRequest,
   log?: DecideWorkflowLog,
 ): Promise<DecideWorkflowResponse> {
-  if (sameLoad(req) && req.rounds_used > 0) {
-    const standing = req.standing_offer;
-    if (standing === null) {
+  if (sameLoad(req) && req.max_round > 0) {
+    const quote = req.latest_broker_offer;
+    if (quote === null) {
       throw new BridgeError(
         "VALIDATION_ERROR",
-        "standing_offer required to repeat broker quote",
+        "offers_history must include a broker_offer to repeat the quote",
         422,
       );
     }
-    const roundsRemaining = roundsRemainingFromUsed(req.rounds_used);
     return buildDecideWorkflowResponse({
       decision: "COUNTER",
-      broker_offer: standing,
+      broker_offer: quote,
       agreed_rate: null,
-      rounds_remaining: roundsRemaining,
-      current_load_id: req.current_load_id,
-      rounds_used: req.rounds_used,
-      standing_offer: standing,
-      calls_agreed_rate: req.agreed_rate,
-      outcome: req.outcome,
+      rounds_remaining: roundsRemainingFromUsed(req.max_round),
       offer: {
         load_id: req.load_id,
-        round: req.rounds_used,
+        round: req.max_round,
         carrier_counter: null,
-        broker_offer: standing,
+        broker_offer: quote,
         decision: "COUNTER",
       },
+      calls: { current_load_id: req.load_id },
     });
   }
 
@@ -235,11 +196,6 @@ async function handleNegotiateOpening(
     broker_offer: opening,
     agreed_rate: null,
     rounds_remaining: 3,
-    current_load_id: req.load_id,
-    rounds_used: 0,
-    standing_offer: opening,
-    calls_agreed_rate: req.agreed_rate,
-    outcome: req.outcome,
     offer: {
       load_id: req.load_id,
       round: 0,
@@ -247,6 +203,7 @@ async function handleNegotiateOpening(
       broker_offer: opening,
       decision: "OPENING",
     },
+    calls: { current_load_id: req.load_id },
   });
 }
 
@@ -256,24 +213,23 @@ async function handleNegotiateCounter(
   req: DecideWorkflowRequest,
   counterDollars: number,
 ): Promise<DecideWorkflowResponse> {
-  const base = baseRoundsUsed(req);
+  const base = baseMaxRound(req);
   if (base >= 3) {
     return buildDecideWorkflowResponse({
       decision: "FINAL_REJECT",
       broker_offer: null,
       agreed_rate: null,
       rounds_remaining: 0,
-      current_load_id: req.current_load_id || req.load_id,
-      rounds_used: 3,
-      standing_offer: req.standing_offer,
-      calls_agreed_rate: req.agreed_rate,
-      outcome: "failed_negotiation",
       offer: {
         load_id: req.load_id,
         round: 3,
         carrier_counter: counterDollars,
         broker_offer: null,
         decision: "FINAL_REJECT",
+      },
+      calls: {
+        current_load_id: req.load_id,
+        outcome: "failed_negotiation",
       },
     });
   }
@@ -286,7 +242,7 @@ async function handleNegotiateCounter(
   }
 
   const previousBrokerOffer =
-    req.standing_offer ?? computeOpeningOffer(fetched.pricing);
+    req.latest_broker_offer ?? computeOpeningOffer(fetched.pricing);
 
   const result = decideOffer({
     round: effectiveRound,
@@ -296,26 +252,27 @@ async function handleNegotiateCounter(
     previousBrokerOffer,
   });
 
-  const newRoundsUsed = effectiveRound;
+  const newMaxRound = effectiveRound;
   const brokerOffer = result.broker_offer ?? null;
 
   if (result.decision === "ACCEPT") {
+    const agreed = result.agreed_rate ?? counterDollars;
     return buildDecideWorkflowResponse({
       decision: "ACCEPT",
       broker_offer: null,
-      agreed_rate: result.agreed_rate ?? counterDollars,
-      rounds_remaining: roundsRemainingFromUsed(newRoundsUsed),
-      current_load_id: req.load_id,
-      rounds_used: newRoundsUsed,
-      standing_offer: req.standing_offer,
-      calls_agreed_rate: result.agreed_rate ?? counterDollars,
-      outcome: "agreed",
+      agreed_rate: agreed,
+      rounds_remaining: roundsRemainingFromUsed(newMaxRound),
       offer: {
         load_id: req.load_id,
         round: effectiveRound,
         carrier_counter: counterDollars,
         broker_offer: null,
         decision: "ACCEPT",
+      },
+      calls: {
+        current_load_id: req.load_id,
+        agreed_rate: agreed,
+        outcome: "agreed",
       },
     });
   }
@@ -326,11 +283,6 @@ async function handleNegotiateCounter(
       broker_offer: null,
       agreed_rate: null,
       rounds_remaining: 0,
-      current_load_id: req.load_id,
-      rounds_used: 3,
-      standing_offer: req.standing_offer,
-      calls_agreed_rate: req.agreed_rate,
-      outcome: "failed_negotiation",
       offer: {
         load_id: req.load_id,
         round: effectiveRound,
@@ -338,23 +290,18 @@ async function handleNegotiateCounter(
         broker_offer: null,
         decision: "FINAL_REJECT",
       },
+      calls: {
+        current_load_id: req.load_id,
+        outcome: "failed_negotiation",
+      },
     });
   }
-
-  const standingAfter =
-    result.decision === "COUNTER" ? brokerOffer : req.standing_offer;
 
   return buildDecideWorkflowResponse({
     decision: result.decision,
     broker_offer: result.decision === "INVALID_COUNTER" ? null : brokerOffer,
     agreed_rate: null,
-    rounds_remaining: roundsRemainingFromUsed(newRoundsUsed),
-    current_load_id: req.load_id,
-    rounds_used: newRoundsUsed,
-    standing_offer:
-      result.decision === "COUNTER" ? standingAfter : req.standing_offer,
-    calls_agreed_rate: req.agreed_rate,
-    outcome: req.outcome,
+    rounds_remaining: roundsRemainingFromUsed(newMaxRound),
     offer: {
       load_id: req.load_id,
       round: effectiveRound,
@@ -362,25 +309,25 @@ async function handleNegotiateCounter(
       broker_offer: result.decision === "INVALID_COUNTER" ? null : brokerOffer,
       decision: result.decision,
     },
+    calls: { current_load_id: req.load_id },
   });
 }
 
 async function handleNegotiateCounterInvalidFormat(
   req: DecideWorkflowRequest,
 ): Promise<DecideWorkflowResponse> {
-  const base = baseRoundsUsed(req);
+  const base = baseMaxRound(req);
   if (base >= 3) {
     return buildDecideWorkflowResponse({
       decision: "FINAL_REJECT",
       broker_offer: null,
       agreed_rate: null,
       rounds_remaining: 0,
-      current_load_id: req.current_load_id || req.load_id,
-      rounds_used: 3,
-      standing_offer: req.standing_offer,
-      calls_agreed_rate: req.agreed_rate,
-      outcome: "failed_negotiation",
       offer: null,
+      calls: {
+        current_load_id: req.load_id,
+        outcome: "failed_negotiation",
+      },
     });
   }
 
@@ -390,11 +337,6 @@ async function handleNegotiateCounterInvalidFormat(
     broker_offer: null,
     agreed_rate: null,
     rounds_remaining: roundsRemainingFromUsed(effectiveRound),
-    current_load_id: req.load_id || req.current_load_id,
-    rounds_used: effectiveRound,
-    standing_offer: req.standing_offer,
-    calls_agreed_rate: req.agreed_rate,
-    outcome: req.outcome,
     offer: {
       load_id: req.load_id,
       round: effectiveRound,
@@ -402,6 +344,7 @@ async function handleNegotiateCounterInvalidFormat(
       broker_offer: null,
       decision: "INVALID_COUNTER",
     },
+    calls: { current_load_id: req.load_id },
   });
 }
 
@@ -410,16 +353,8 @@ export async function decideOfferForWorkflow(
   config: BridgeConfig,
   req: DecideWorkflowRequest,
   log?: DecideWorkflowLog,
-  meta?: Pick<ParsedDecideWorkflow, "precedenceWarnings" | "inputStyle">,
 ): Promise<DecideWorkflowResponse> {
-  if (meta?.precedenceWarnings.length) {
-    log?.warn(
-      { fields: meta.precedenceWarnings, input_style: meta.inputStyle },
-      "workflow input precedence: source fields override legacy copies",
-    );
-  }
-
-  if (req.otp_status !== "passed") {
+  if (req.otp_challenge_status !== "passed") {
     return gateNotVerified(req);
   }
 

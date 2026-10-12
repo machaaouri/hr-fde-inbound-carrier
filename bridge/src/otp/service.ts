@@ -57,7 +57,6 @@ export function verifyOtp(input: VerifyOtpInput): VerifyOtpOutput {
       result: "locked_out",
       attempts: input.attempts,
       attempts_left: 0,
-      mc_locked: false,
     };
   }
 
@@ -67,7 +66,6 @@ export function verifyOtp(input: VerifyOtpInput): VerifyOtpOutput {
       result: "expired",
       attempts: input.attempts,
       attempts_left: Math.max(0, MAX_VERIFY_ATTEMPTS - input.attempts),
-      mc_locked: false,
     };
   }
 
@@ -82,7 +80,6 @@ export function verifyOtp(input: VerifyOtpInput): VerifyOtpOutput {
       result: "passed",
       attempts: input.attempts,
       attempts_left: MAX_VERIFY_ATTEMPTS - input.attempts,
-      mc_locked: true,
     };
   }
 
@@ -96,13 +93,11 @@ function failedOrLocked(attempts: number): VerifyOtpOutput {
       result: "locked_out",
       attempts,
       attempts_left: 0,
-      mc_locked: false,
     };
   }
   return {
     result: "failed",
     attempts,
     attempts_left: MAX_VERIFY_ATTEMPTS - attempts,
-    mc_locked: false,
   };
 }
