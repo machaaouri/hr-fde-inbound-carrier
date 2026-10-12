@@ -1,6 +1,6 @@
 # Inbound carrier sales (HappyRobot + bridge)
 
-Voice workflow (**Version 4**) verifies carriers (FMCSA + OTP), searches loads, negotiates rates, and books through a **stateless TypeScript bridge** on Cloud Run. Call state lives in **Twin** (Postgres); the bridge talks to **TMS** (TCP) and **FMCSA** (HTTPS).
+Voice workflow (**Version 5**) verifies carriers (FMCSA + OTP), searches loads, negotiates rates, and books through a **stateless TypeScript bridge** on Cloud Run. Call state lives in **Twin** (Postgres); the bridge talks to **TMS** (TCP) and **FMCSA** (HTTPS).
 
 ## Architecture
 
@@ -15,7 +15,7 @@ flowchart LR
 
 | Piece | Role |
 | --- | --- |
-| **Workflow** | `verify_carrier`, `search_loads`, `send_otp`, `verify_otp`, `negotiate` (opening / counter / `action: accept`), `book_load`. Export: [`workflow/exports/inbound-carrier-sales-version-4.json`](workflow/exports/inbound-carrier-sales-version-4.json). |
+| **Workflow** | `verify_carrier`, `search_loads`, `send_otp`, `verify_otp`, `negotiate` (opening / counter / `action: accept`), `book_load`. Export: [`workflow/exports/inbound-carrier-sales-version-5.json`](workflow/exports/inbound-carrier-sales-version-5.json). |
 | **Bridge** | [`bridge/`](bridge/) — Fastify, Bearer auth, no Twin credentials. Contract: [`bridge/openapi.yaml`](bridge/openapi.yaml). Design detail: [`docs/design.md`](docs/design.md). |
 | **Twin** | [`docs/twin/schema.sql`](docs/twin/schema.sql), [`views.sql`](docs/twin/views.sql), [`seed.sql`](docs/twin/seed.sql). |
 

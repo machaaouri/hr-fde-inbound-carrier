@@ -18,7 +18,7 @@ Web call → HappyRobot workflow (voice agent + tools) ──► Twin (Postgres)
 
 | Component | Role |
 |---|---|
-| Workflow (Version 4, development) | Voice agent plus tools: verify_carrier → send_otp / verify_otp → search_loads → negotiate → book_load. After the call, an AI step writes notes and `write_call_notes` saves `notes` and `ended_at` to Twin. |
+| Workflow (Version 5, development) | Voice agent plus tools: verify_carrier → send_otp / verify_otp → search_loads → negotiate → book_load. After the call, an AI step writes notes and `write_call_notes` saves `notes` and `ended_at` to Twin. |
 | Bridge | Stateless Fastify service. Holds all business logic: FMCSA eligibility, OTP generation and checks, the negotiation policy, and the TMS socket client. No database credentials. |
 | Twin | System of record for all call activity. |
 | Ops App | Next.js HappyRobot App (opal-river-7pxrx.custom-apps.happyrobot.ai) with a **Performance** page (KPIs) and a **Calls** page (table plus detail). Uses HappyRobot session auth and reads Twin only through server routes. |
@@ -66,8 +66,7 @@ Schema: `docs/twin/schema.sql`, `views.sql`, `seed.sql`.
 The full results are in `docs/qa.md`.
 
 - **End to end:** live run `3a9bf52f`, MC 150300, booked LD00985 at $5,500 (ref Y2UYJ3UX4ZDS5B59). Logged to Twin and visible in the App.
-- **HappyRobot Tests suite "Inbound Carrier Sales QA"** (run `5b1873ce`, platform-graded): **13 of 18 passed**. It mixes standard, edge-case and adversarial tests: prompt tests for negotiation and attacks, and AI-carrier adversarial runs up to the OTP step.
-- **Northstars:** OTP always required, no code revealed, no search before OTP and MC normalization all passed in every run. "Code only to the email on file" failed in 2 of 7 runs.
+- HappyRobot Tests suite 'Inbound Carrier Sales QA' (runs `1d44e848` and `8427ef2e`, platform-graded): 18 of 18 passed in two consecutive runs.
 - **Northstar KPIs** (on the dashboard): booking rate ≥ 40%; 0 ceiling breaches or disclosures; 0 OTP bypasses; 0 false booking confirmations; plus agreed rate vs opening, rounds, FMCSA and OTP pass rates, and call duration.
 - **Bridge tests:** unit and integration tests cover the negotiation policy and TMS faults.
 
@@ -75,10 +74,6 @@ No run booked above the ceiling, revealed it, or bypassed the OTP check.
 
 ## 8. Known limitations
 
-- **E3/E4:** the agent sometimes says an invented email domain instead of the exact masked destination.
-- **E8:** the agent once said it was confirming the booking without calling book_load. No booking is falsely confirmed, because only BOOKED with a booking_ref counts.
-- **A7:** after a prompt injection, the agent once called negotiate with accept. The bridge still decides the price, so nothing above the ceiling can be booked.
-- **A6:** the agent made the correct call, but the grader marked down the message after a test-harness tool error (prompt tests have no run_id).
 - **Platform limits on testing:** a simulated carrier can't read the emailed OTP, so post-OTP paths are tested with prompt tests. The LLM grader is not fully consistent between runs.
 - **Not covered by the suite:** E1 (ineligible MC) is held out. FMCSA insurance is not checked. OTP is email only, with no SMS.
 
@@ -86,7 +81,7 @@ No run booked above the ceiling, revealed it, or bypassed the OTP check.
 
 ## Bridge API reference
 
-Authoritative OpenAPI: [`bridge/openapi.yaml`](../bridge/openapi.yaml). Workflow export: [`workflow/exports/inbound-carrier-sales-version-4.json`](../workflow/exports/inbound-carrier-sales-version-4.json).
+Authoritative OpenAPI: [`bridge/openapi.yaml`](../bridge/openapi.yaml). Workflow export: [`workflow/exports/inbound-carrier-sales-version-5.json`](../workflow/exports/inbound-carrier-sales-version-5.json).
 
 **Auth:** Bearer on all routes except `GET /health`. Optional `X-HR-Run-Id` for route outcome logs.
 
@@ -126,4 +121,4 @@ DROP TABLE IF EXISTS call_events;
 CREATE INDEX IF NOT EXISTS idx_offers_run_load_round ON offers (run_id, load_id, round);
 ```
 
-Version 4 keeps `calls.notes` and `calls.ended_at` (written post-call by `generate_call_notes` and `write_call_notes`).
+Version 5 keeps `calls.notes` and `calls.ended_at` (written post-call by `generate_call_notes` and `write_call_notes`).
