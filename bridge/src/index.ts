@@ -1,4 +1,4 @@
-import { loadConfig } from "./config/env.ts";
+import { loadConfig } from "./config/config.ts";
 import { buildApp } from "./server/build-app.ts";
 
 async function main(): Promise<void> {

@@ -1,9 +1,9 @@
 import { z } from "zod";
-import type { BridgeConfig } from "../config/types.ts";
+import type { BridgeConfig } from "../config/config.ts";
 import {
   normalizeChallengeStatus,
   parseTwinDollarField,
-} from "../http/workflow-request-fields.ts";
+} from "../http/request-parsing.ts";
 import type { TmsClient } from "../tms/client.ts";
 import { executeBookingOnTms } from "./create-booking-service.ts";
 

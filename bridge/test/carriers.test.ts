@@ -3,18 +3,18 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
-import type { BridgeConfig } from "../src/config/types.ts";
+import type { BridgeConfig } from "../src/config/config.ts";
 import { FmcsaClient } from "../src/fmcsa/client.ts";
 import {
   evaluateCarrierEligibility,
   notFoundResult,
-} from "../src/fmcsa/evaluate-eligibility.ts";
-import { normalizeMcDocket } from "../src/fmcsa/normalize-mc.ts";
+} from "../src/fmcsa/eligibility.ts";
+import { normalizeMcDocket } from "../src/fmcsa/eligibility.ts";
 import {
   isWebkeyNotFoundBody,
   readCarrierAuthorityRows,
   readCarrierFromDocketBody,
-} from "../src/fmcsa/parse-json.ts";
+} from "../src/fmcsa/client.ts";
 import { buildApp } from "../src/server/build-app.ts";
 
 const AUTH = "Bearer test-bridge-key-12345678";

@@ -8,15 +8,15 @@ import {
   it,
 } from "vitest";
 import type { FastifyInstance } from "fastify";
-import type { BridgeConfig } from "../src/config/types.ts";
-import type { OfferHistoryRow } from "../src/http/workflow-request-fields.ts";
+import type { BridgeConfig } from "../src/config/config.ts";
+import type { OfferHistoryRow } from "../src/http/request-parsing.ts";
 import {
   agreedRateFromAcceptHistory,
   deriveNegotiationFromHistory,
-} from "../src/http/workflow-request-fields.ts";
+} from "../src/http/request-parsing.ts";
 import { buildApp } from "../src/server/build-app.ts";
 import { decideOfferForWorkflow } from "../src/offers/decide-service.ts";
-import { assertNoSensitivePricingFields } from "../src/offers/decide-types.ts";
+import { assertNoSensitivePricingFields } from "../src/offers/decide-service.ts";
 import {
   decideLogRound,
   parseCarrierCounterRaw,

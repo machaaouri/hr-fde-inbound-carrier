@@ -1,29 +1,34 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import rateLimit from "@fastify/rate-limit";
 import { ZodError } from "zod";
-import type { BridgeConfig } from "../config/types.ts";
-import { BridgeError, toErrorEnvelope, unauthorizedError } from "../http/errors.ts";
-import { createRequestContext } from "../http/request-context.ts";
-import { bindRequestContext } from "../http/request-timing.ts";
-import {
-  endpointForUrl,
-  logRouteOutcome,
-  setRouteOutcome,
-} from "../http/route-log.ts";
-import { parseSearchLoadsInput } from "../loads/parse-search-body.ts";
-import { sendOtpBody, verifyCarrierBody, verifyOtpBody } from "../http/schemas.ts";
+import type { BridgeConfig } from "../config/config.ts";
 import {
   bookingForWorkflow,
   parseBookingWorkflowInput,
 } from "../bookings/booking-workflow.ts";
-import { decideOfferForWorkflow } from "../offers/decide-service.ts";
-import { parseDecideWorkflowInput } from "../offers/parse-decide-body.ts";
 import { verifyCarrierByMc } from "../carriers/verify-service.ts";
 import { FmcsaClient } from "../fmcsa/client.ts";
 import type { VerifyCarrierResult } from "../fmcsa/types.ts";
+import { BridgeError, toErrorEnvelope, unauthorizedError } from "../http/errors.ts";
+import {
+  bindRequestContext,
+  createRequestContext,
+  endpointForUrl,
+  logRouteOutcome,
+  setRouteOutcome,
+} from "../http/logging.ts";
+import { parseSearchLoadsInput } from "../loads/mapping.ts";
+import { decideOfferForWorkflow } from "../offers/decide-service.ts";
+import { parseDecideWorkflowInput } from "../offers/parse-decide-body.ts";
 import { searchLoads } from "../loads/search-service.ts";
 import { TmsClient } from "../tms/client.ts";
-import { handleSendOtp, handleVerifyOtp } from "../http/otp-handlers.ts";
+import {
+  handleSendOtp,
+  handleVerifyOtp,
+  sendOtpBody,
+  verifyCarrierBody,
+  verifyOtpBody,
+} from "./routes.ts";
 
 export type BuildAppDeps = {
   tms?: TmsClient;

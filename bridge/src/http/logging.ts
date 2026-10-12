@@ -1,5 +1,39 @@
+import { randomUUID } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { FastifyBaseLogger, FastifyRequest } from "fastify";
-import type { RouteOutcomeSnapshot } from "./types.ts";
+import type { RequestContext, RouteOutcomeSnapshot } from "./errors.ts";
+
+const HR_RUN_HEADER = "x-hr-run-id";
+
+export function createRequestContext(req: FastifyRequest): RequestContext {
+  const hrRunId = req.headers[HR_RUN_HEADER];
+  return {
+    requestId: randomUUID(),
+    hrRunId: typeof hrRunId === "string" ? hrRunId : undefined,
+    startedAtMs: performance.now(),
+    tmsMs: 0,
+  };
+}
+
+
+const storage = new AsyncLocalStorage<RequestContext>();
+
+/** Bind per-request context for TMS timing (Node 20+ `enterWith`). */
+export function bindRequestContext(ctx: RequestContext): void {
+  storage.enterWith(ctx);
+}
+
+export function addTmsDuration(ms: number): void {
+  const ctx = storage.getStore();
+  if (ctx) {
+    ctx.tmsMs = (ctx.tmsMs ?? 0) + ms;
+  }
+}
+
+export function getBoundRequestContext(): RequestContext | undefined {
+  return storage.getStore();
+}
+
 
 export function setRouteOutcome(req: FastifyRequest, outcome: RouteOutcomeSnapshot): void {
   req.ctx.routeOutcome = outcome;

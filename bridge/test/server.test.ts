@@ -1,6 +1,6 @@
-import type { BridgeConfig } from "../src/config/types.ts";
+import type { BridgeConfig } from "../src/config/config.ts";
 import type { FastifyInstance } from "fastify";
-import type { SearchLoadsResponse } from "../src/loads/safe-load-types.ts";
+import type { SearchLoadsResponse } from "../src/loads/types.ts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/server/build-app.ts";
 import { TmsClient } from "../src/tms/client.ts";
@@ -106,7 +106,7 @@ describe("logRouteOutcome", () => {
   it("emits one route outcome line with request_id and hr_run_id", async () => {
     const lines: unknown[] = [];
     const { default: Fastify } = await import("fastify");
-    const { logRouteOutcome, setRouteOutcome } = await import("../src/http/route-log.ts");
+    const { logRouteOutcome, setRouteOutcome } = await import("../src/http/logging.ts");
     const app = Fastify({
       logger: {
         level: "info",

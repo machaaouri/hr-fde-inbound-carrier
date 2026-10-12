@@ -1,25 +1,151 @@
-import type { BridgeConfig } from "../config/types.ts";
+import type { BridgeConfig } from "../config/config.ts";
 import { BridgeError } from "../http/errors.ts";
+import {
+  agreedRateFromAcceptHistory,
+  sameNegotiationLoad,
+  type OfferHistoryRow,
+} from "../http/request-parsing.ts";
+import { isBookableLoad, tmsPaddedInt } from "../loads/mapping.ts";
+import type { TmsClient } from "../tms/client.ts";
+import { fetchLoadRecord, TMS_FIELD } from "../tms/protocol.ts";
 import {
   computeOpeningOffer,
   decideOffer,
   isLoadboardAboveMax,
   type LoadPricing,
 } from "./policy.ts";
-import type { TmsClient } from "../tms/client.ts";
-import {
-  buildDecideWorkflowResponse,
-  roundsRemainingFromUsed,
-} from "./decide-types.ts";
-import type { DecideCallsPatch, DecideWorkflowRequest, DecideWorkflowResponse } from "./decide-types.ts";
-import { isBookableLoad } from "../loads/tms-record.ts";
-import { fetchLoadRecord } from "../tms/fetch-load-record.ts";
-import { parseLoadPricingFromRecord } from "./load-pricing.ts";
 import { parseCarrierCounterRaw } from "./parse-decide-body.ts";
-import {
-  agreedRateFromAcceptHistory,
-  sameNegotiationLoad,
-} from "../http/workflow-request-fields.ts";
+
+
+/** Decisions exposed on `agent.decision` (includes workflow gates). */
+export type AgentOfferDecision =
+  | "OPENING"
+  | "ACCEPT"
+  | "COUNTER"
+  | "FINAL_REJECT"
+  | "INVALID_COUNTER"
+  | "LOAD_UNAVAILABLE"
+  | "NOT_VERIFIED"
+  | "NO_OFFER";
+
+export type DecideWorkflowRequest = {
+  action: "negotiate" | "accept";
+  load_id: string;
+  carrier_counter: string;
+  current_load_id: string;
+  otp_challenge_status: string;
+  offers_history: OfferHistoryRow[];
+  /** From offers_history for this load (max round). */
+  max_round: number;
+  /** From offers_history for this load (last broker_offer). */
+  latest_broker_offer: number | null;
+};
+
+export type DecideOfferLog = {
+  load_id: string;
+  round: number;
+  carrier_counter: number | null;
+  broker_offer: number | null;
+  decision: string;
+};
+
+export type DecideCallsPatch = {
+  current_load_id?: string;
+  agreed_rate?: number;
+  outcome?: string;
+};
+
+export type DecideWorkflowResponse = {
+  agent: {
+    decision: AgentOfferDecision;
+    broker_offer: number | null;
+    agreed_rate: number | null;
+    rounds_remaining: number;
+  };
+  calls: DecideCallsPatch;
+  offer: DecideOfferLog | null;
+};
+
+export function assertNoSensitivePricingFields(json: string): void {
+  if (/max_buy|maxbuy|ceiling|posted_rate|loadboard/i.test(json)) {
+    throw new Error("response leaks internal pricing fields");
+  }
+}
+
+type BuildDecideParams = {
+  decision: AgentOfferDecision;
+  broker_offer: number | null;
+  agreed_rate: number | null;
+  rounds_remaining: number;
+  offer: DecideOfferLog | null;
+  calls: DecideCallsPatch;
+};
+
+export function buildDecideWorkflowResponse(p: BuildDecideParams): DecideWorkflowResponse {
+  return {
+    agent: {
+      decision: p.decision,
+      broker_offer: p.broker_offer,
+      agreed_rate: p.agreed_rate,
+      rounds_remaining: p.rounds_remaining,
+    },
+    calls: p.calls,
+    offer: p.offer,
+  };
+}
+
+export function roundsRemainingFromUsed(roundsUsed: number): number {
+  return Math.max(0, 3 - roundsUsed);
+}
+
+
+export type LoadPricingSnapshot = LoadPricing & {
+  loadAvailable: boolean;
+};
+
+/** Parse RATE/MAX_BUY when the record is already loaded. Non-bookable → no pricing fields read. */
+export function parseLoadPricingFromRecord(record: Map<string, string>): LoadPricingSnapshot {
+  if (!isBookableLoad(record)) {
+    return { postedRate: 0, maxBuy: 0, loadAvailable: false };
+  }
+
+  let postedRate: number;
+  let maxBuy: number;
+  try {
+    postedRate = tmsPaddedInt(record.get(TMS_FIELD.RATE) ?? "", TMS_FIELD.RATE);
+    const maxRaw = record.get(TMS_FIELD.MAX_BUY);
+    if (maxRaw === undefined || maxRaw.trim() === "") {
+      throw new BridgeError(
+        "CEILING_UNAVAILABLE",
+        "Ceiling not available for this load",
+        503,
+        true,
+      );
+    }
+    maxBuy = tmsPaddedInt(maxRaw, TMS_FIELD.MAX_BUY);
+  } catch (err) {
+    if (err instanceof BridgeError) {
+      throw err;
+    }
+    throw new BridgeError("TMS_BAD_RESPONSE", "Invalid load pricing fields", 502, true);
+  }
+
+  return {
+    postedRate,
+    maxBuy,
+    loadAvailable: true,
+  };
+}
+
+export async function fetchLoadPricing(
+  client: TmsClient,
+  tmsToken: string,
+  loadId: string,
+): Promise<LoadPricingSnapshot> {
+  const record = await fetchLoadRecord(client, tmsToken, loadId);
+  return parseLoadPricingFromRecord(record);
+}
+
 
 function sameLoad(req: DecideWorkflowRequest): boolean {
   return sameNegotiationLoad(req.load_id, req.current_load_id);

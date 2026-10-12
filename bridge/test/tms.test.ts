@@ -1,17 +1,17 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
-import type { BridgeConfig } from "../src/config/types.ts";
-import { assertSafeSearchJson } from "../src/loads/assert-safe-search-json.ts";
+import type { BridgeConfig } from "../src/config/config.ts";
+import { assertSafeSearchJson } from "../src/loads/mapping.ts";
 import { buildApp } from "../src/server/build-app.ts";
 import { TmsClient } from "../src/tms/client.ts";
 import {
   encodeDebugEcho,
   encodeLoadGet,
   encodeLoadQuery,
-} from "../src/tms/commands.ts";
-import { TMS_FIELD } from "../src/tms/fields.ts";
-import { debugEchoMatchesRequest } from "../src/tms/parse-echo.ts";
-import { parseRecordLine, parseTmsResponse } from "../src/tms/parser.ts";
+} from "../src/tms/protocol.ts";
+import { TMS_FIELD } from "../src/tms/protocol.ts";
+import { debugEchoMatchesRequest } from "../src/tms/protocol.ts";
+import { parseRecordLine, parseTmsResponse } from "../src/tms/protocol.ts";
 import { FakeTmsServer } from "./fake-tms/server.ts";
 
 const BRIDGE_AUTH = "Bearer test-bridge-key-12345678";

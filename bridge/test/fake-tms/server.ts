@@ -1,5 +1,5 @@
 import { createServer, type Socket } from "node:net";
-import { TMS_FIELD } from "../../src/tms/fields.ts";
+import { TMS_FIELD } from "../../src/tms/protocol.ts";
 import type { FakeLoadRecord } from "./fixtures.ts";
 import {
   defaultFakeLoads,

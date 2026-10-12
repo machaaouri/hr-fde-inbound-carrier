@@ -1,8 +1,11 @@
-import type { BridgeConfig } from "../config/types.ts";
+import type { BridgeConfig } from "../config/config.ts";
 import { validationError } from "../http/errors.ts";
-import { evaluateCarrierEligibility, notFoundResult } from "../fmcsa/evaluate-eligibility.ts";
+import {
+  evaluateCarrierEligibility,
+  normalizeMcDocket,
+  notFoundResult,
+} from "../fmcsa/eligibility.ts";
 import { FmcsaClient } from "../fmcsa/client.ts";
-import { normalizeMcDocket } from "../fmcsa/normalize-mc.ts";
 import type { VerifyCarrierResult } from "../fmcsa/types.ts";
 
 export async function verifyCarrierByMc(

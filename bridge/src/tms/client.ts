@@ -1,17 +1,17 @@
 import { createConnection, type Socket } from "node:net";
-import type { BridgeConfig } from "../config/types.ts";
+import type { BridgeConfig } from "../config/config.ts";
 import { BridgeError } from "../http/errors.ts";
+import { addTmsDuration } from "../http/logging.ts";
 import {
   TMS_CONNECT_MS,
   TMS_MAX_FRAME_BYTES,
   TMS_READ_BACKOFF_MS,
   TMS_READ_MAX_ATTEMPTS,
   TMS_RESPONSE_MS,
-} from "./constants.ts";
-import { parseTmsResponse } from "./parser.ts";
-import type { ParsedTmsResponse } from "./parser-types.ts";
-import { addTmsDuration } from "../http/request-timing.ts";
-import { bridgeErrorFromTmsWire } from "./map-wire-error.ts";
+  bridgeErrorFromTmsWire,
+  parseTmsResponse,
+} from "./protocol.ts";
+import type { ParsedTmsResponse } from "./types.ts";
 
 export type TmsClientOptions = {
   host: string;

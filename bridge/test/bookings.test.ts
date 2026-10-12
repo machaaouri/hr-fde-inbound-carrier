@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
-import type { BridgeConfig } from "../src/config/types.ts";
+import type { BridgeConfig } from "../src/config/config.ts";
 import { assertNoSensitivePricingFields } from "../src/bookings/booking-workflow.ts";
 import { buildApp } from "../src/server/build-app.ts";
 import { TmsClient } from "../src/tms/client.ts";

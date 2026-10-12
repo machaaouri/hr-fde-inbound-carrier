@@ -1,15 +1,14 @@
-import { encodeLoadQuery } from "../tms/commands.ts";
 import type { TmsClient } from "../tms/client.ts";
 import { unwrapTmsResponse } from "../tms/client.ts";
-import { mapTmsSearchRowToSafeLoad } from "./map-safe-load.ts";
-import type { SearchLoadsResponse } from "./safe-load-types.ts";
+import { encodeLoadQuery } from "../tms/protocol.ts";
 import {
   isBookableLoad,
   isFuturePickup,
+  mapTmsSearchRowToSafeLoad,
   matchesPickupDateFilter,
-} from "./tms-record.ts";
-import { toLoadQueryFilters } from "./to-tms-filters.ts";
-import type { NormalizedSearchLoads } from "./types.ts";
+  toLoadQueryFilters,
+} from "./mapping.ts";
+import type { NormalizedSearchLoads, SearchLoadsResponse } from "./types.ts";
 
 const QUERY_MAX_RESULTS = 50;
 const MAX_SAFE_LOADS = 3;

@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
-import type { BridgeConfig } from "../src/config/types.ts";
+import type { BridgeConfig } from "../src/config/config.ts";
 import { buildApp } from "../src/server/build-app.ts";
-import { MAX_RESENDS, MAX_VERIFY_ATTEMPTS } from "../src/otp/constants.ts";
+import { MAX_RESENDS, MAX_VERIFY_ATTEMPTS } from "../src/otp/crypto.ts";
 import { hashOtpCode } from "../src/otp/crypto.ts";
-import { maskEmail } from "../src/otp/mask-email.ts";
+import { maskEmail } from "../src/otp/crypto.ts";
 import { sendOtp, verifyOtp } from "../src/otp/service.ts";
 
 describe("maskEmail", () => {

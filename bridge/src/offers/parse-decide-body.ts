@@ -4,8 +4,8 @@ import {
   deriveNegotiationFromHistory,
   normalizeChallengeStatus,
   parseOffersHistoryRaw,
-} from "../http/workflow-request-fields.ts";
-import type { DecideWorkflowRequest } from "./decide-types.ts";
+} from "../http/request-parsing.ts";
+import type { DecideWorkflowRequest } from "./decide-service.ts";
 
 export type CarrierCounterParse =
   | { kind: "empty" }
@@ -41,7 +41,7 @@ export function parseCarrierCounterRaw(raw: string): CarrierCounterParse {
   return { kind: "ok", dollars };
 }
 
-export { parseTwinDollarField } from "../http/workflow-request-fields.ts";
+export { parseTwinDollarField } from "../http/request-parsing.ts";
 
 const offerHistoryRowSchema = z.object({
   load_id: z.string(),

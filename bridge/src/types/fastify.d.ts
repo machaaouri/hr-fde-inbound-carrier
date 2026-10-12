@@ -1,4 +1,4 @@
-import type { RequestContext } from "../http/types.ts";
+import type { RequestContext } from "../http/errors.ts";
 
 declare module "fastify" {
   interface FastifyRequest {

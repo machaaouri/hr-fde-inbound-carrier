@@ -2,7 +2,22 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadDotenv } from "dotenv";
 import { z } from "zod";
-import type { BridgeConfig } from "./types.ts";
+
+export type AppEnv = "development" | "staging" | "production";
+
+export type LogLevel = "debug" | "info" | "warn" | "error";
+
+export type BridgeConfig = {
+  appEnv: AppEnv;
+  port: number;
+  logLevel: LogLevel;
+  bridgeApiKey: string;
+  tmsHost: string;
+  tmsPort: number;
+  tmsToken: string;
+  fmcsaApiKey: string;
+};
+
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 loadDotenv({ path: resolve(repoRoot, ".env") });

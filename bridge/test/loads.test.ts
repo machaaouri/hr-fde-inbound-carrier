@@ -8,21 +8,21 @@ import {
   it,
 } from "vitest";
 import type { FastifyInstance } from "fastify";
-import type { BridgeConfig } from "../src/config/types.ts";
+import type { BridgeConfig } from "../src/config/config.ts";
 import { BridgeError } from "../src/http/errors.ts";
 import {
   mapTmsRecordToSafeLoad,
   mapTmsSearchRowToSafeLoad,
-} from "../src/loads/map-safe-load.ts";
-import { normalizeSearchLoadsInput } from "../src/loads/normalize-search-input.ts";
+} from "../src/loads/mapping.ts";
+import { normalizeSearchLoadsInput } from "../src/loads/mapping.ts";
 import { searchLoads } from "../src/loads/search-service.ts";
-import { isBookableLoad } from "../src/loads/tms-record.ts";
-import { toLoadQueryFilters } from "../src/loads/to-tms-filters.ts";
+import { isBookableLoad } from "../src/loads/mapping.ts";
+import { toLoadQueryFilters } from "../src/loads/mapping.ts";
 import { buildApp } from "../src/server/build-app.ts";
-import { encodeLoadQuery } from "../src/tms/commands.ts";
+import { encodeLoadQuery } from "../src/tms/protocol.ts";
 import { TmsClient } from "../src/tms/client.ts";
-import { TMS_FIELD } from "../src/tms/fields.ts";
-import { parseRecordLine } from "../src/tms/parser.ts";
+import { TMS_FIELD } from "../src/tms/protocol.ts";
+import { parseRecordLine } from "../src/tms/protocol.ts";
 import { FakeTmsServer } from "./fake-tms/server.ts";
 
 const TOKEN = "t-search-test";

@@ -1,8 +1,8 @@
 import {
   TMS_FULL_LOAD_FIELD_ORDER,
   TMS_QUERY_SUMMARY_FIELDS,
-} from "../../src/tms/fields.ts";
-import { parseRecordLine } from "../../src/tms/parser.ts";
+} from "../../src/tms/protocol.ts";
+import { parseRecordLine } from "../../src/tms/protocol.ts";
 
 /** Full LOAD_GET lines (handbook-shaped). MAX_BUY present on first load for ceiling tests later. */
 const FULL_LOAD_LINES = [
