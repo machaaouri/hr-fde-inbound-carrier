@@ -1,5 +1,5 @@
-import { TMS_FIELD } from "../fields.ts";
-import { parseRecordLine } from "../parser.ts";
+import { TMS_FIELD } from "../../src/tms/fields.ts";
+import { parseRecordLine } from "../../src/tms/parser.ts";
 
 export type ParsedTmsRequest = {
   cmd: string;

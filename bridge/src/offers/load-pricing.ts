@@ -4,7 +4,7 @@ import { tmsPaddedInt } from "../loads/tms-record.ts";
 import type { TmsClient } from "../tms/client.ts";
 import { fetchLoadRecord } from "../tms/fetch-load-record.ts";
 import { TMS_FIELD } from "../tms/fields.ts";
-import type { LoadPricing } from "../negotiation/types.ts";
+import type { LoadPricing } from "./policy.ts";
 
 export type LoadPricingSnapshot = LoadPricing & {
   loadAvailable: boolean;

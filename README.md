@@ -1,36 +1,64 @@
-# hr-fde-inbound-carrier
+# Inbound carrier sales (HappyRobot + bridge)
 
-Inbound carrier sales automation for HappyRobot Logistics — voice agent, FMCSA/OTP verification, legacy TMS integration, rate negotiation, Twin logging, and ops dashboard (FDE technical challenge).
+Voice workflow (**Version 3**) verifies carriers (FMCSA + OTP), searches loads, negotiates rates, and books through a **stateless TypeScript bridge** on Cloud Run. Call state lives in **Twin** (Postgres); the bridge talks to **legacy TMS** (TCP) and **FMCSA** (HTTPS).
 
-## Repository layout
+## Architecture
 
-| Path | Purpose |
+```mermaid
+flowchart LR
+  Agent[Voice agent] --> WF[HappyRobot workflow]
+  WF --> Twin[(Twin DB)]
+  WF --> Bridge[Bridge API]
+  Bridge --> TMS[(Legacy TMS)]
+  Bridge --> FMCSA[FMCSA API]
+  WF --> Twin
+```
+
+| Piece | Role |
 | --- | --- |
-| `bridge/` | Stateless TypeScript integration API (TMS TCP, FMCSA, negotiation) |
-| `workflow/` | Workflow exports and node specs |
-| `ops-app/` | Ops manager HappyRobot App (step 8) |
-| `docs/` | Decisions, handbook notes, Twin SQL, probe output |
-| `qa/` | Test suites and results (later steps) |
+| **Workflow** | Six tools: `verify_carrier`, `search_loads`, `send_otp`, `verify_otp`, `negotiate` (opening / counter / `action: accept`), `book_load`. Export: [`workflow/exports/inbound-carrier-sales-version-3.json`](workflow/exports/inbound-carrier-sales-version-3.json). |
+| **Bridge** | [`bridge/`](bridge/) — Fastify, Bearer auth, no Twin credentials. Contract: [`bridge/openapi.yaml`](bridge/openapi.yaml). Design detail: [`docs/design.md`](docs/design.md). |
+| **Twin** | [`docs/twin/schema.sql`](docs/twin/schema.sql), [`views.sql`](docs/twin/views.sql), [`seed.sql`](docs/twin/seed.sql). |
 
-Requirements: `PROBLEM_BRIEF.md`. Architecture decisions: `docs/decisions.md`. TMS wire rules: `docs/tms-integration.md`. Build plan: `.cursor/plans/inbound_carrier_design.plan.md`.
+Requirements brief: [`docs/problem-brief.md`](docs/problem-brief.md).
 
-## Local setup (step 1)
+## Local setup
 
-1. Copy `.env.example` to `.env` and fill secrets (never commit `.env`).
-2. Install bridge tooling: `make install`
-3. Probe live TMS (no secrets printed): `make probe-tms` → updates `docs/archive/tms-probe-results.json`  
-   Probe FMCSA: `make probe-fmcsa` → updates `docs/archive/fmcsa-probe-results.json` (test MCs: [`qa/test-carriers.md`](qa/test-carriers.md))  
-   Run in your **system terminal** (needs outbound TCP to `TMS_HOST`). Progress logs go to stderr.  
-   If you see a timeout on `LOAD_QUERY`, re-run — the TMS randomly injects slow/no responses; the probe retries twice.
-4. CI locally: `make lint typecheck test docker-build`
+1. Copy [`.env.example`](.env.example) → `.env` (never commit `.env`).
+2. `make install`
+3. Twin: run `docs/twin/schema.sql`, then `views.sql`, then `seed.sql` in the Twin SQL console.
+4. Terminal 1: `make run` → `http://localhost:8080/health`
+5. Terminal 2 (optional): `make tunnel` with `NGROK_DOMAIN` in `.env` for HappyRobot webhooks.
 
-Twin tables: run `docs/twin/schema.sql`, `views.sql`, then edit/run `seed.sql` in the HappyRobot Twin SQL console (`docs/twin/README.md`).
-
-**Workflow specs:** `workflow/README.md` (W1–W3). Bookings envelope: [`docs/bookings-workflow.md`](docs/bookings-workflow.md). FMCSA: [`docs/fmcsa-integration.md`](docs/fmcsa-integration.md).
-
-**Local bridge:** `make run` + `make tunnel` in another terminal.
+## Test & deploy
 
 ```bash
-make run      # terminal 1 — http://localhost:8080/health
-make tunnel   # terminal 2 — public https://$NGROK_DOMAIN
+make lint typecheck test docker-build
+make deploy   # Cloud Run via scripts/deploy-cloud-run.sh
 ```
+
+Smoke (with `BRIDGE_API_KEY` in env):
+
+```bash
+curl -sS "$BRIDGE_BASE/health"
+curl -sS -X POST "$BRIDGE_BASE/v1/carriers/verify" \
+  -H "Authorization: Bearer $BRIDGE_API_KEY" -H "Content-Type: application/json" \
+  -d '{"mc_number":"136818"}'
+```
+
+## Test carriers (FMCSA + OTP seed)
+
+Twin seed maps these **ACTIVE** freight MCs to the email in [`docs/twin/seed.sql`](docs/twin/seed.sql) (default inbox for E2E):
+
+| MC | Carrier | Use |
+| --- | --- | --- |
+| **136818** | Swift Transportation | Default happy path |
+| **133655** | Schneider National | Alternate ACTIVE |
+| **114457** | Dart Transit | Alternate ACTIVE |
+| **150300** | Miller Transports | Alternate ACTIVE |
+| **784219** | BOZHA COMPANY | `NOT_AUTHORIZED` (no active authority) |
+| **999999** | — | `NOT_FOUND` |
+
+Eligibility rule: `allowedToOperate=Y`, `oosDate` null, common or contract authority **A**. Bridge returns `FMCSA_UNAVAILABLE` on upstream errors — do not treat as ineligible.
+
+Live load example: **`LD00983`** → opening negotiate returns **$821** when TMS is reachable.

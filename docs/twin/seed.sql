@@ -1,5 +1,5 @@
 -- Twin carrier_contacts for voice E2E (OTP inbox).
--- MC list and expected FMCSA outcomes: qa/test-carriers.md
+-- MC list and expected FMCSA outcomes: README (test carriers).
 
 INSERT INTO carrier_contacts (mc_number, legal_name, email, source)
 VALUES

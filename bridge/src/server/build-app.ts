@@ -12,8 +12,10 @@ import {
 } from "../http/route-log.ts";
 import { parseSearchLoadsInput } from "../loads/parse-search-body.ts";
 import { sendOtpBody, verifyCarrierBody, verifyOtpBody } from "../http/schemas.ts";
-import { bookingForWorkflow } from "../bookings/booking-workflow-service.ts";
-import { parseBookingWorkflowInput } from "../bookings/parse-booking-body.ts";
+import {
+  bookingForWorkflow,
+  parseBookingWorkflowInput,
+} from "../bookings/booking-workflow.ts";
 import { decideOfferForWorkflow } from "../offers/decide-service.ts";
 import { parseDecideWorkflowInput } from "../offers/parse-decide-body.ts";
 import { verifyCarrierByMc } from "../carriers/verify-service.ts";

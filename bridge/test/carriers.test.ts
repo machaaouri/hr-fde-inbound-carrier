@@ -1,7 +1,20 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import type { BridgeConfig } from "../src/config/types.ts";
 import { FmcsaClient } from "../src/fmcsa/client.ts";
+import {
+  evaluateCarrierEligibility,
+  notFoundResult,
+} from "../src/fmcsa/evaluate-eligibility.ts";
+import { normalizeMcDocket } from "../src/fmcsa/normalize-mc.ts";
+import {
+  isWebkeyNotFoundBody,
+  readCarrierAuthorityRows,
+  readCarrierFromDocketBody,
+} from "../src/fmcsa/parse-json.ts";
 import { buildApp } from "../src/server/build-app.ts";
 
 const AUTH = "Bearer test-bridge-key-12345678";
@@ -200,5 +213,171 @@ describe("POST /v1/carriers/verify", () => {
     expect(res.statusCode).toBe(503);
     expect(res.json().error.code).toBe("FMCSA_MISCONFIGURED");
     expect(res.json().error.retryable).toBe(false);
+  });
+});
+
+
+describe("normalizeMcDocket", () => {
+  it("strips MC prefix", () => {
+    expect(normalizeMcDocket("MC784219")).toBe("784219");
+    expect(normalizeMcDocket("mc-784219")).toBe("784219");
+    expect(normalizeMcDocket("784219")).toBe("784219");
+  });
+
+  it("rejects garbage", () => {
+    expect(normalizeMcDocket("")).toBeNull();
+    expect(normalizeMcDocket("MC")).toBeNull();
+  });
+});
+
+describe("evaluateCarrierEligibility", () => {
+  const carrier = {
+    dotNumber: 123456,
+    legalName: "Test Carrier LLC",
+    allowedToOperate: "Y",
+    commonAuthorityStatus: "A",
+    contractAuthorityStatus: "N",
+    oosDate: null,
+  };
+
+  it("ACTIVE when allowed and common authority A on docket", () => {
+    const out = evaluateCarrierEligibility(carrier, []);
+    expect(out).toMatchObject({
+      eligible: true,
+      reason: "ACTIVE",
+      carrier_name: "Test Carrier LLC",
+      dot_number: "123456",
+    });
+  });
+
+  it("ACTIVE when contract A on authority row", () => {
+    const out = evaluateCarrierEligibility(
+      { ...carrier, commonAuthorityStatus: "I" },
+      [{ contractAuthorityStatus: "A", commonAuthorityStatus: "N" }],
+    );
+    expect(out.reason).toBe("ACTIVE");
+  });
+
+  it("NOT_AUTHORIZED when not allowed to operate", () => {
+    const out = evaluateCarrierEligibility(
+      { ...carrier, allowedToOperate: "N" },
+      [],
+    );
+    expect(out.reason).toBe("NOT_AUTHORIZED");
+    expect(out.eligible).toBe(false);
+  });
+
+  it("NOT_AUTHORIZED when common/contract not A", () => {
+    const out = evaluateCarrierEligibility(
+      {
+        ...carrier,
+        commonAuthorityStatus: "I",
+        contractAuthorityStatus: "N",
+      },
+      [],
+    );
+    expect(out.reason).toBe("NOT_AUTHORIZED");
+  });
+
+  it("OUT_OF_SERVICE when oosDate set", () => {
+    const out = evaluateCarrierEligibility(
+      { ...carrier, oosDate: "2020-01-01" },
+      [],
+    );
+    expect(out.reason).toBe("OUT_OF_SERVICE");
+  });
+
+  it("OUT_OF_SERVICE when outOfService Y", () => {
+    const out = evaluateCarrierEligibility(
+      { ...carrier, outOfService: "Y" },
+      [],
+    );
+    expect(out.reason).toBe("OUT_OF_SERVICE");
+  });
+
+  it("NOT_FOUND helper", () => {
+    expect(notFoundResult()).toEqual({ eligible: false, reason: "NOT_FOUND" });
+  });
+});
+
+describe("parse FMCSA JSON shapes", () => {
+  it("reads content[] docket carrier", () => {
+    const carrier = readCarrierFromDocketBody({
+      content: [{ carrier: { dotNumber: 1, legalName: "X", allowedToOperate: "Y" } }],
+    });
+    expect(carrier?.legalName).toBe("X");
+  });
+
+  it("reads nested carrier content object", () => {
+    const carrier = readCarrierFromDocketBody({
+      content: {
+        carrier: {
+          dotNumber: 1,
+          legalName: "X",
+          allowedToOperate: "Y",
+        },
+      },
+    });
+    expect(carrier?.legalName).toBe("X");
+  });
+
+  it("reads authority rows from content[]", () => {
+    const rows = readCarrierAuthorityRows({
+      content: [{ carrierAuthority: { commonAuthorityStatus: "A" } }],
+    });
+    expect(rows[0]?.commonAuthorityStatus).toBe("A");
+  });
+});
+
+
+const fixturesDir = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "./fixtures/fmcsa",
+);
+
+function loadFixture(name: string): unknown {
+  return JSON.parse(readFileSync(resolve(fixturesDir, name), "utf8")) as unknown;
+}
+
+describe("FMCSA live fixtures (test/fixtures/fmcsa)", () => {
+  it("parses MC 784219 docket + empty authority as NOT_AUTHORIZED", () => {
+    const carrier = readCarrierFromDocketBody(loadFixture("live-docket-mc784219.json"));
+    expect(carrier).not.toBeNull();
+    const authorityRows = readCarrierAuthorityRows(
+      loadFixture("live-authority-empty-dot2296639.json"),
+    );
+    expect(authorityRows).toHaveLength(0);
+    const out = evaluateCarrierEligibility(carrier!, authorityRows);
+    expect(out).toMatchObject({
+      eligible: false,
+      reason: "NOT_AUTHORIZED",
+      carrier_name: "BOZHA COMPANY INC",
+      dot_number: "2296639",
+    });
+  });
+
+  it("parses active authority rows (DOT 54283) with docket common A as ACTIVE", () => {
+    const authorityRows = readCarrierAuthorityRows(
+      loadFixture("live-authority-active-dot54283.json"),
+    );
+    expect(authorityRows).toHaveLength(1);
+    const carrier = {
+      dotNumber: 54283,
+      legalName: "Active Example Carrier",
+      allowedToOperate: "Y",
+      commonAuthorityStatus: "A",
+      contractAuthorityStatus: "N",
+      oosDate: null,
+    };
+    const out = evaluateCarrierEligibility(carrier, authorityRows);
+    expect(out).toMatchObject({
+      eligible: true,
+      reason: "ACTIVE",
+      dot_number: "54283",
+    });
+  });
+
+  it("recognizes invalid webKey 404 JSON", () => {
+    expect(isWebkeyNotFoundBody(loadFixture("live-badkey-404.json"))).toBe(true);
   });
 });

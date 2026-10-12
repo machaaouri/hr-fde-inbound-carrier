@@ -1,17 +1,53 @@
-import { counterStepSize, floor25, roundDownToStep } from "./money.ts";
-import type { DecideOfferInput, DecideOfferResult, LoadPricing } from "./types.ts";
+export type OfferDecision =
+  | "OPENING"
+  | "ACCEPT"
+  | "COUNTER"
+  | "FINAL_REJECT"
+  | "INVALID_COUNTER"
+  | "LOAD_UNAVAILABLE";
 
-/** Fraction of gap (previous → target) broker moves each counter round (~half on round 1). */
+export type LoadPricing = {
+  postedRate: number;
+  maxBuy: number;
+};
+
+export type DecideOfferInput = {
+  round: number;
+  pricing: LoadPricing;
+  carrierCounter?: number;
+  loadAvailable: boolean;
+  previousBrokerOffer?: number;
+};
+
+export type DecideOfferResult = {
+  decision: OfferDecision;
+  broker_offer?: number;
+  agreed_rate?: number;
+  rounds_remaining: number;
+};
+
+export function roundDownToStep(dollars: number, step: number): number {
+  if (!Number.isFinite(dollars) || !Number.isFinite(step) || step <= 0) {
+    throw new Error("roundDownToStep: invalid amount or step");
+  }
+  return Math.floor(dollars / step) * step;
+}
+
+export function floor25(dollars: number): number {
+  return roundDownToStep(dollars, 25);
+}
+
+export function counterStepSize(previousBrokerOffer: number): number {
+  return previousBrokerOffer < 1000 ? 5 : 25;
+}
+
 const MEET_FRACTIONS = [0.5, 0.65, 0.75] as const;
-
-/** Keep published counters below max_rate so probing cannot infer the ceiling. */
 const CONCEAL_BELOW_MAX = [50, 40, 30] as const;
 
 export function isLoadboardAboveMax(pricing: LoadPricing): boolean {
   return pricing.postedRate > pricing.maxBuy;
 }
 
-/** Opening pitch = loadboard_rate, clamped to max_rate when TMS posted rate exceeds ceiling. */
 export function computeOpeningOffer(pricing: LoadPricing): number {
   const loadboard = pricing.postedRate;
   const maxRate = pricing.maxBuy;
@@ -21,7 +57,6 @@ export function computeOpeningOffer(pricing: LoadPricing): number {
   return loadboard;
 }
 
-/** Accept carrier counter when within max($50, 3% of last broker quote). */
 export function closeGapAcceptThreshold(brokerOffer: number): number {
   return Math.max(50, Math.floor(brokerOffer * 0.03));
 }
@@ -43,10 +78,6 @@ function softBrokerCap(maxRate: number, round: number): number {
   return floor25(cap);
 }
 
-/**
- * Next broker counter: a meaningful step toward the carrier,
- * never above `maxRate` or the carrier's counter, never below `previous`.
- */
 export function nextBrokerCounterOffer(
   previous: number,
   carrierCounter: number,
@@ -92,7 +123,6 @@ function isInvalidCounter(counter: number): boolean {
   return !Number.isInteger(counter) || counter <= 0;
 }
 
-/** Pure negotiation decision (loadboard-first, ceiling never disclosed). */
 export function decideOffer(input: DecideOfferInput): DecideOfferResult {
   if (!input.loadAvailable) {
     return {

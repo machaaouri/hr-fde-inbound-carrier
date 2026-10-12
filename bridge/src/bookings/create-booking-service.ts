@@ -5,7 +5,7 @@ import { tmsTrim } from "../loads/tms-record.ts";
 import { TMS_FIELD, TMS_LOAD_STATUS } from "../tms/fields.ts";
 import type { TmsClient } from "../tms/client.ts";
 import { fetchLoadRecord } from "../tms/fetch-load-record.ts";
-import type { BookingExecutionResult } from "./booking-types.ts";
+import type { BookingExecutionResult } from "./booking-workflow.ts";
 import { submitLoadBookWire } from "./submit-load-book.ts";
 
 export async function executeBookingOnTms(

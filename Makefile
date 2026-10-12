@@ -1,4 +1,4 @@
-.PHONY: install lint typecheck test docker-build probe-tms probe-fmcsa dev run tunnel deploy
+.PHONY: install lint typecheck test docker-build dev run tunnel deploy
 
 install:
 	cd bridge && npm install
@@ -14,12 +14,6 @@ test:
 
 docker-build:
 	docker build -t inbound-carrier-bridge:local ./bridge
-
-probe-tms:
-	cd bridge && npx tsx scripts/tms-probe.ts > ../docs/archive/tms-probe-results.json && cat ../docs/archive/tms-probe-results.json
-
-probe-fmcsa:
-	cd bridge && npx tsx scripts/fmcsa-probe.ts && cat ../docs/archive/fmcsa-probe-results.json
 
 dev:
 	cd bridge && npm run dev
