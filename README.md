@@ -1,6 +1,6 @@
 # Inbound carrier sales (HappyRobot + bridge)
 
-Voice workflow (**Version 4**) verifies carriers (FMCSA + OTP), searches loads, negotiates rates, and books through a **stateless TypeScript bridge** on Cloud Run. Call state lives in **Twin** (Postgres); the bridge talks to **legacy TMS** (TCP) and **FMCSA** (HTTPS).
+Voice workflow (**Version 4**) verifies carriers (FMCSA + OTP), searches loads, negotiates rates, and books through a **stateless TypeScript bridge** on Cloud Run. Call state lives in **Twin** (Postgres); the bridge talks to **TMS** (TCP) and **FMCSA** (HTTPS).
 
 ## Architecture
 
@@ -9,9 +9,8 @@ flowchart LR
   Agent[Voice agent] --> WF[HappyRobot workflow]
   WF --> Twin[(Twin DB)]
   WF --> Bridge[Bridge API]
-  Bridge --> TMS[(Legacy TMS)]
+  Bridge --> TMS[(TMS)]
   Bridge --> FMCSA[FMCSA API]
-  WF --> Twin
 ```
 
 | Piece | Role |
@@ -20,7 +19,7 @@ flowchart LR
 | **Bridge** | [`bridge/`](bridge/) — Fastify, Bearer auth, no Twin credentials. Contract: [`bridge/openapi.yaml`](bridge/openapi.yaml). Design detail: [`docs/design.md`](docs/design.md). |
 | **Twin** | [`docs/twin/schema.sql`](docs/twin/schema.sql), [`views.sql`](docs/twin/views.sql), [`seed.sql`](docs/twin/seed.sql). |
 
-Requirements brief: [`docs/problem-brief.md`](docs/problem-brief.md). QA results: [`docs/qa.md`](docs/qa.md).
+Build doc and API detail: [`docs/design.md`](docs/design.md). QA results: [`docs/qa.md`](docs/qa.md).
 
 ## Local setup
 

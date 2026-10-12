@@ -4,8 +4,6 @@ import { TMS_FIELD, TMS_LOAD_STATUS, type TmsFieldKey } from "../tms/protocol.ts
 import type { LoadQueryFilters } from "../tms/types.ts";
 import type { NormalizedSearchLoads, SafeLoad, SearchLoadsRequestBody } from "./types.ts";
 
-
-/* --- tms-record.ts --- */
 export function tmsTrim(value: string): string {
   return value.trim();
 }
@@ -46,11 +44,6 @@ export function isBookableLoad(record: Map<string, string>): boolean {
   return status !== undefined && tmsTrim(status) === TMS_LOAD_STATUS.OPEN;
 }
 
-/** @deprecated Use {@link isBookableLoad} — same rule (OPEN only). */
-export function isOpenStatus(record: Map<string, string>): boolean {
-  return isBookableLoad(record);
-}
-
 export function isFuturePickup(record: Map<string, string>, nowMs = Date.now()): boolean {
   const raw = record.get(TMS_FIELD.PICKUP_DT);
   if (!raw) {
@@ -75,7 +68,6 @@ export function matchesPickupDateFilter(
   return pickupDateKeyFromTms(raw) === filterKey;
 }
 
-/* --- map-safe-load.ts --- */
 function requireField(record: Map<string, string>, key: TmsFieldKey): string {
   const value = record.get(key);
   if (value === undefined || tmsTrim(value) === "") {
@@ -137,35 +129,6 @@ export function mapTmsSearchRowToSafeLoad(record: Map<string, string>): SafeLoad
   };
 }
 
-/** Full LOAD_GET record — all handbook fields expected. */
-export function mapTmsRecordToSafeLoad(record: Map<string, string>): SafeLoad {
-  const F = TMS_FIELD;
-  return {
-    id: tmsTrim(requireField(record, F.LOAD_ID)),
-    origin: {
-      city: tmsTrim(requireField(record, F.ORIG_CITY)),
-      state: tmsTrim(requireField(record, F.ORIG_STATE)),
-      zip: tmsTrim(requireField(record, F.ORIG_ZIP)),
-    },
-    destination: {
-      city: tmsTrim(requireField(record, F.DEST_CITY)),
-      state: tmsTrim(requireField(record, F.DEST_STATE)),
-      zip: tmsTrim(requireField(record, F.DEST_ZIP)),
-    },
-    pickup_at: tmsDateTimeToIso(requireField(record, F.PICKUP_DT)),
-    delivery_at: tmsDateTimeToIso(requireField(record, F.DELIVERY_DT)),
-    equipment_type: tmsTrim(requireField(record, F.EQTYPE)),
-    loadboard_rate: tmsPaddedInt(requireField(record, F.RATE), F.RATE),
-    miles: tmsPaddedInt(requireField(record, F.MILES), F.MILES),
-    weight: tmsPaddedInt(requireField(record, F.WEIGHT), F.WEIGHT),
-    commodity: tmsTrim(requireField(record, F.COMMODITY)),
-    pieces: tmsPaddedInt(requireField(record, F.PIECES), F.PIECES),
-    dimensions: optionalTextField(record, F.DIMS),
-    notes: optionalTextField(record, F.NOTES),
-  };
-}
-
-/* --- normalize-search-input.ts --- */
 const STATE_CODE = /^[A-Z]{2}$/;
 
 function blankToUndefined(value: string | undefined): string | undefined {
@@ -214,7 +177,6 @@ export function normalizeSearchLoadsInput(
   };
 }
 
-/* --- parse-search-body.ts --- */
 /** Accept optional fields as any string (including ""); normalization drops blanks. */
 const searchLoadsBodySchema = z.object({
   equipment_type: z.string(),
@@ -229,7 +191,6 @@ export function parseSearchLoadsInput(body: unknown): NormalizedSearchLoads {
   return normalizeSearchLoadsInput(parsed);
 }
 
-/* --- to-tms-filters.ts --- */
 /** Map bridge search input to TMS LOAD_QUERY fields (omit unset filters). */
 export function toLoadQueryFilters(input: NormalizedSearchLoads): LoadQueryFilters {
   const filters: LoadQueryFilters = {
@@ -247,7 +208,6 @@ export function toLoadQueryFilters(input: NormalizedSearchLoads): LoadQueryFilte
   return filters;
 }
 
-/* --- assert-safe-search-json.ts --- */
 /** Search responses may include loadboard_rate; never ceiling or MAX_BUY. */
 export function assertSafeSearchJson(json: string): void {
   if (/max_buy|maxbuy|ceiling|MAX_BUY/i.test(json)) {

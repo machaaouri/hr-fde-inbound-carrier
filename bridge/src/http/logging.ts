@@ -30,11 +30,6 @@ export function addTmsDuration(ms: number): void {
   }
 }
 
-export function getBoundRequestContext(): RequestContext | undefined {
-  return storage.getStore();
-}
-
-
 export function setRouteOutcome(req: FastifyRequest, outcome: RouteOutcomeSnapshot): void {
   req.ctx.routeOutcome = outcome;
 }

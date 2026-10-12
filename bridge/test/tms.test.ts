@@ -5,13 +5,12 @@ import { assertSafeSearchJson } from "../src/loads/mapping.ts";
 import { buildApp } from "../src/server/build-app.ts";
 import { TmsClient } from "../src/tms/client.ts";
 import {
-  encodeDebugEcho,
   encodeLoadGet,
   encodeLoadQuery,
+  parseRecordLine,
+  parseTmsResponse,
+  TMS_FIELD,
 } from "../src/tms/protocol.ts";
-import { TMS_FIELD } from "../src/tms/protocol.ts";
-import { debugEchoMatchesRequest } from "../src/tms/protocol.ts";
-import { parseRecordLine, parseTmsResponse } from "../src/tms/protocol.ts";
 import { FakeTmsServer } from "./fake-tms/server.ts";
 
 const BRIDGE_AUTH = "Bearer test-bridge-key-12345678";
@@ -94,15 +93,6 @@ describe("TmsClient against fake TMS faults", () => {
     return new TmsClient({ host: "127.0.0.1", port, token: FAULT_TOKEN, ...FAST });
   }
 
-  it("DEBUG_ECHO succeeds (bypasses fault injection on fake server)", async () => {
-    fake.setFault("timeout");
-    const parsed = await client().executeRead(
-      encodeDebugEcho(FAULT_TOKEN, "HELLO"),
-      "DEBUG_ECHO",
-    );
-    expect(parsed.kind).toBe("success");
-  });
-
   it("timeout → TMS_UNAVAILABLE", async () => {
     fake.setFault("timeout");
     await expect(
@@ -162,14 +152,6 @@ function body(line: string): string {
 }
 
 describe("TMS request encoding (handbook transcripts)", () => {
-  it("DEBUG_ECHO uses MSG", () => {
-    expect(body(encodeDebugEcho(TMS_AUTH, "HELLO"))).toBe(
-      "CMD:DEBUG_ECHO|AUTH:t-9c3a|MSG:HELLO",
-    );
-    expect(body(encodeDebugEcho(TMS_AUTH, "probe-7"))).toContain("|MSG:probe-7");
-    expect(body(encodeDebugEcho(TMS_AUTH, "HELLO"))).not.toContain("PAYLOAD");
-  });
-
   it("LOAD_QUERY transcript 1 — state + equipment", () => {
     expect(
       body(
@@ -205,19 +187,6 @@ describe("TMS request encoding (handbook transcripts)", () => {
     );
   });
 });
-
-describe("DEBUG_ECHO response parsing", () => {
-  it("matches handbook success line", () => {
-    const line = "ECHO|AUTH:OK|FIELDS_PARSED:3|MSG:HELLO";
-    expect(debugEchoMatchesRequest(line, "HELLO")).toBe(true);
-  });
-
-  it("rejects empty MSG when probe expected a value", () => {
-    const line = "ECHO|AUTH:OK|FIELDS_PARSED:3|MSG:";
-    expect(debugEchoMatchesRequest(line, "probe")).toBe(false);
-  });
-});
-
 
 const ENDPOINT_ERRORS_TOKEN = "t-endpoint-errors";
 

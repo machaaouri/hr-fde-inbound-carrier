@@ -1,8 +1,4 @@
-export type TmsCommand =
-  | "DEBUG_ECHO"
-  | "LOAD_QUERY"
-  | "LOAD_GET"
-  | "LOAD_BOOK";
+export type TmsCommand = "LOAD_QUERY" | "LOAD_GET" | "LOAD_BOOK";
 
 export type LoadQueryFilters = {
   orig_state?: string;
@@ -11,13 +7,6 @@ export type LoadQueryFilters = {
   eqtype?: string;
   max_results?: number;
 };
-
-export type EchoResponse = {
-  auth_ok: boolean;
-  msg: string | null;
-  fields_parsed: number | null;
-};
-
 
 export type TmsWireError = {
   code: string;

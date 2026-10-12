@@ -85,23 +85,6 @@ export class FakeTmsServer {
       return;
     }
 
-    if (req.cmd === "DEBUG_ECHO") {
-      if (req.auth !== this.token) {
-        socket.write(
-          "ERR|CODE:AUTH_FAILED|MSG:invalid or missing auth token\r\n",
-        );
-        socket.end();
-        return;
-      }
-      const msg = req.fields.get(TMS_FIELD.MSG) ?? "";
-      const fieldsParsed = 2 + req.fields.size;
-      socket.write(
-        `ECHO|AUTH:OK|FIELDS_PARSED:${fieldsParsed}|MSG:${msg}\r\nEND\r\n`,
-      );
-      socket.end();
-      return;
-    }
-
     if (req.auth !== this.token) {
       socket.write(
         "ERR|CODE:AUTH_FAILED|MSG:invalid or missing auth token\r\n",

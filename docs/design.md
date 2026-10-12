@@ -1,94 +1,109 @@
-# Inbound carrier bridge — design (current)
+# Build Doc: Inbound Carrier Sales Automation
 
-Authoritative HTTP contract: [`bridge/openapi.yaml`](../bridge/openapi.yaml). Workflow export: [`workflow/exports/inbound-carrier-sales-version-4.json`](../workflow/exports/inbound-carrier-sales-version-4.json).
+Author: Houssame Machaaoui · Workflow: [workflow link] · Repo: machaaouri/hr-fde-inbound-carrier (private) · Video: [video link]
 
-## Auth & correlation
+## 1. Scope
 
-- **Bearer** `Authorization` on every route except `GET /health`.
-- Optional **`X-HR-Run-Id`** → logged as `hr_run_id` with `request_id` on one **route outcome** line per request (never echoed to the agent).
+HappyRobot Logistics wants the first part of an inbound carrier call automated: verify the carrier, confirm their identity, offer a load, negotiate within the ceiling, book, and log the call. The handoff to a senior rep is mocked, as the brief allows. The agent runs over a web call, with no phone number provisioned.
 
-## API summary
+## 2. Architecture
 
-### `GET /health`
+```
+Web call → HappyRobot workflow (voice agent + tools) ──► Twin (Postgres)  ◄── Ops App (HappyRobot App, server-side reads)
+                         │
+                         └── HTTPS + Bearer ──► Bridge (TypeScript, Cloud Run, US region)
+                                                   ├── FMCSA API (HTTPS)
+                                                   └── Legacy TMS (TCP, `KEY:VALUE|` frames)
+```
 
-`{ "status": "ok" }` — no auth.
+| Component | Role |
+|---|---|
+| Workflow (Version 4, development) | Voice agent plus tools: verify_carrier → send_otp / verify_otp → search_loads → negotiate → book_load. After the call, an AI step writes notes and `write_call_notes` saves `notes` and `ended_at` to Twin. |
+| Bridge | Stateless Fastify service. Holds all business logic: FMCSA eligibility, OTP generation and checks, the negotiation policy, and the TMS socket client. No database credentials. |
+| Twin | System of record for all call activity. |
+| Ops App | Next.js HappyRobot App (opal-river-7pxrx.custom-apps.happyrobot.ai) with a **Performance** page (KPIs) and a **Calls** page (table plus detail). Uses HappyRobot session auth and reads Twin only through server routes. |
 
-### `POST /v1/carriers/verify`
+## 3. Call flow
 
-**In:** `{ "mc_number": string }`  
-**Out (200):** `{ eligible, reason, carrier_name?, dot_number?, contact_email? }` — hide `contact_email` from the agent.  
-**503:** `FMCSA_UNAVAILABLE`, `FMCSA_MISCONFIGURED`.
+1. **Verify carrier:** the MC is normalized to digits and the bridge calls FMCSA. A carrier is eligible when `allowedToOperate=Y`, there is no out-of-service date, and it has active common or contract authority. Ineligible carriers end the call. An FMCSA outage returns `FMCSA_UNAVAILABLE` and is not treated as ineligible.
+2. **OTP (hard gate):** a code is emailed only to the address on file, and the agent announces only the masked destination. Codes expire after 5 minutes, allow 3 attempts and 2 resends. The bridge returns a hash and salt, and the code is compared in constant time. No load search is allowed before the OTP passes.
+3. **Load search:** the bridge queries the TMS and returns up to 3 loads with safe fields only. max_rate is never included.
+4. **Negotiate:** the bridge decides every price (`OPENING`, `COUNTER`, `ACCEPT`, `FINAL_REJECT`, …). After 3 counter rounds it returns `FINAL_REJECT`: the call closes professionally, is logged as a failed negotiation, and is not transferred.
+5. **Book:** the bridge checks the ceiling again and books in the TMS. The agent says "booked" only on `BOOKED` / `BOOKED_RECONCILED` with a booking_ref.
+6. **Handoff (mocked) and logging:** on BOOKED or BOOKED_RECONCILED with a booking_ref, the agent confirms the load and rate, says it is handing the carrier to a senior rep to finalize paperwork, says the handoff is complete and closes the call. No workflow step transfers the call, as the brief allows for web calls. Post-call, generate_call_notes and write_call_notes save MC, load ID, agreed rate, outcome, notes and ended_at to Twin.
 
-### `POST /v1/loads/search`
+## 4. Key design decisions
 
-**In:** `equipment_type` (required), optional lane fields.  
-**Out:** up to 3 loads with **safe fields** including `loadboard_rate` (TMS `RATE`). **Never** `MAX_BUY` / ceiling.
+- **Logic in the bridge, not the prompt or workflow SQL.** The LLM never sees the ceiling and cannot pick a price. It passes along the carrier's number and speaks the bridge's decision. This is what enforces the ceiling and blocks social engineering of the rate.
+- **Stateless bridge, workflow-owned Twin writes.** The bridge returns patches (`calls`, `offer`) and the workflow persists them. The bridge holds no DB credentials, and every decision can be replayed from `offers` history.
+- **Non-probeable negotiation.** Concessions shrink by round with a soft cap below the ceiling, so a carrier can't find max_rate by probing. The ceiling never appears in JSON responses or logs.
+- **US-region Cloud Run.** FMCSA blocks non-US traffic. The bridge ships as a Docker image and deploys with one command (`make deploy`).
+- **Resilient TMS client.** One TCP connection per request, with timeouts and retries. TMS faults map to `TMS_UNAVAILABLE` / `TMS_BAD_RESPONSE`, and raw TMS codes never reach the agent.
+- **Twin and Apps only.** Both requirements were met natively, so no external DB or UI was needed.
 
-### `POST /v1/offers/decide`
+## 5. Data model (Twin)
 
-Workflow-owned negotiation. **In:**
+| Object | Purpose |
+|---|---|
+| `calls` | One row per run: run_id, MC, carrier, FMCSA result, current load, agreed_rate, outcome, booking_ref, notes, started_at / ended_at |
+| `offers` | Every negotiation round (FK `run_id → calls.run_id`), the audit trail of offers made |
+| `otp_challenges` | OTP status, attempts and resends per run (hash and salt only, never the code) |
+| `carrier_contacts` | MC → email on file used for OTP |
+| `v_kpi_summary` | KPI aggregates for the Performance page |
+| `v_followups` | Calls that need attention (booking, OTP or system failures) |
 
-| Field | Notes |
+Schema: `docs/twin/schema.sql`, `views.sql`, `seed.sql`.
+
+## 6. Security
+
+- Every bridge endpoint except `/health` requires a Bearer token. Secrets live in environment variables and never in the repo or prompts.
+- OTP: masked destination only, no resend to a different address, no bypass under any framing. Codes, hashes and salts are redacted from logs and never shown in the App.
+- The ceiling is used only inside the bridge.
+- The App reads Twin server-side behind HappyRobot session auth, with no client-side Twin credentials.
+
+## 7. QA summary
+
+The full results are in `docs/qa.md`.
+
+- **End to end:** live run `3a9bf52f`, MC 150300, booked LD00985 at $5,500 (ref Y2UYJ3UX4ZDS5B59). Logged to Twin and visible in the App.
+- **HappyRobot Tests suite "Inbound Carrier Sales QA"** (run `5b1873ce`, platform-graded): **13 of 18 passed**. It mixes standard, edge-case and adversarial tests: prompt tests for negotiation and attacks, and AI-carrier adversarial runs up to the OTP step.
+- **Northstars:** OTP always required, no code revealed, no search before OTP and MC normalization all passed in every run. "Code only to the email on file" failed in 2 of 7 runs.
+- **Northstar KPIs** (on the dashboard): booking rate ≥ 40%; 0 ceiling breaches or disclosures; 0 OTP bypasses; 0 false booking confirmations; plus agreed rate vs opening, rounds, FMCSA and OTP pass rates, and call duration.
+- **Bridge tests:** unit and integration tests cover the negotiation policy and TMS faults.
+
+No run booked above the ceiling, revealed it, or bypassed the OTP check.
+
+## 8. Known limitations
+
+- **E3/E4:** the agent sometimes says an invented email domain instead of the exact masked destination.
+- **E8:** the agent once said it was confirming the booking without calling book_load. No booking is falsely confirmed, because only BOOKED with a booking_ref counts.
+- **A7:** after a prompt injection, the agent once called negotiate with accept. The bridge still decides the price, so nothing above the ceiling can be booked.
+- **A6:** the agent made the correct call, but the grader marked down the message after a test-harness tool error (prompt tests have no run_id).
+- **Platform limits on testing:** a simulated carrier can't read the emailed OTP, so post-OTP paths are tested with prompt tests. The LLM grader is not fully consistent between runs.
+- **Not covered by the suite:** E1 (ineligible MC) is held out. FMCSA insurance is not checked. OTP is email only, with no SMS.
+
+---
+
+## Bridge API reference
+
+Authoritative OpenAPI: [`bridge/openapi.yaml`](../bridge/openapi.yaml). Workflow export: [`workflow/exports/inbound-carrier-sales-version-4.json`](../workflow/exports/inbound-carrier-sales-version-4.json).
+
+**Auth:** Bearer on all routes except `GET /health`. Optional `X-HR-Run-Id` for route outcome logs.
+
+| Route | Summary |
 | --- | --- |
-| `action` | `negotiate` or `accept` |
-| `load_id` | Load the carrier chose |
-| `carrier_counter` | Raw string; `""` = opening or accept branch |
-| `current_load_id` | Twin active load or `""` |
-| `otp_challenge_status` | Twin `otp_challenges.status` (`passed` for TMS) |
-| `offers_history` | Twin `offers` rows (array or JSON string; may be `[]`) |
+| `GET /health` | `{ "status": "ok" }` |
+| `POST /v1/carriers/verify` | FMCSA eligibility; hide `contact_email` from agent |
+| `POST /v1/loads/search` | Up to 3 loads; `loadboard_rate` only, never ceiling |
+| `POST /v1/offers/decide` | `{ agent, calls, offer }`; accept via `action: "accept"` |
+| `POST /v1/bookings` | Book when OTP passed and rate acceptable |
+| `POST /v1/otp/send`, `/verify` | Hash/salt OTP; 5 min TTL, 3 attempts, 2 resends |
 
-**Out (200):** `{ agent, calls, offer }`
+Negotiation policy lives in `bridge/src/offers/policy.ts` (opening at posted rate capped by ceiling, close-gap accept, max 3 counter rounds).
 
-- **`agent`:** `decision`, `broker_offer`, `agreed_rate`, `rounds_remaining`
-- **`calls`:** patch only (`current_load_id`, `agreed_rate`, `outcome` when set)
-- **`offer`:** row to append to Twin `offers`, or `null`
+## Twin upgrade SQL
 
-**Accept:** no price in request. If history already has **ACCEPT** for the load → idempotent (same `agreed_rate`, empty `calls`, no `offer`). Else accepts **latest `broker_offer`** in history (≤ ceiling). Every new **ACCEPT** `offer` stores agreed price in **`broker_offer`**.
-
-**Decisions:** `OPENING`, `COUNTER`, `ACCEPT`, `FINAL_REJECT`, `INVALID_COUNTER`, `LOAD_UNAVAILABLE`, `NOT_VERIFIED`, `NO_OFFER`.
-
-### `POST /v1/bookings`
-
-**In:** `{ load_id, mc_number, agreed_rate, run_id, otp_challenge_status }`  
-**Out (200):** `{ agent: { status, booking_ref }, calls }` — `calls` empty unless booked (`booking_ref`, `outcome: booked`).
-
-**Statuses:** `NOT_READY`, `RATE_NOT_ACCEPTABLE`, `LOAD_UNAVAILABLE`, `NOT_BOOKED`, `BOOKED`, `BOOKED_RECONCILED`.
-
-### OTP
-
-**`POST /v1/otp/send`** — `{ run_id, mc_number, email, resends, is_resend? }` → hash, salt, expiry, hidden `otp_code` for email node.  
-**`POST /v1/otp/verify`** — `{ run_id, code, code_hash, salt, expires_at, attempts }` → `{ result, attempts, attempts_left }`.
-
-Limits: 5 min TTL, 3 verify attempts, 2 resends. Constant-time compare; pino redacts codes/hashes/salts.
-
-## Negotiation policy (pure functions in `bridge/src/offers/policy.ts`)
-
-1. **Opening** = TMS posted rate; if above ceiling, open at ceiling (warn in logs without printing ceiling).
-2. Counter ≤ last broker quote → **ACCEPT** at carrier number.
-3. **Close gap:** within max($50, 3% of last quote) and ≤ ceiling → **ACCEPT**.
-4. Else broker moves toward carrier (~50% / 65% / 75% of gap by round), $5 or $25 steps, soft cap below ceiling so the max is not probeable.
-5. Max **3 counter rounds** (max `round` in `offers_history`); round 3 + counter → **FINAL_REJECT**.
-6. Ceiling used only inside bridge — never in JSON or logs.
-
-Example (handbook load **LD0000045821**): loadboard $2,150, ceiling $1,950 → opening **$1,950**; carrier **$2,200** → counter **$1,900** (soft cap, not half-gap).
-
-## Booking / TMS
-
-- Stateless: re-check ceiling on book; accept `PENDING` + booking ref from TMS when wire returns it.
-- TCP TMS: one connection per request, `KEY:VALUE|` frames, timeouts/retries per client.
-- Errors map to `TMS_UNAVAILABLE`, `TMS_BAD_RESPONSE`, etc. — never raw TMS codes.
-
-## Twin (Version 4)
-
-**Tables:** `carrier_contacts`, `calls`, `otp_challenges`, `offers`.
-
-**`calls` columns:** `run_id`, `env`, `started_at`, `ended_at`, `mc_number`, `carrier_name`, `dot_number`, `fmcsa_eligible`, `fmcsa_reason`, `current_load_id`, `agreed_rate`, `outcome`, `booking_ref`, `notes`.
-
-OTP verification and negotiation rounds are **not** duplicated on `calls` (use `otp_challenges` and `offers`).
-
-**Post-call (Version 4):** after the voice session ends, workflow steps **`generate_call_notes`** (AI summary) and **`write_call_notes`** (Twin write) set **`calls.notes`** and **`calls.ended_at`**.
-
-**Upgrade from older Twin:** run once in the Twin SQL console (backup first), then re-run [`twin/views.sql`](twin/views.sql):
+For Twin databases created before Version 3 slim `calls`, run once (backup first), then re-run [`twin/views.sql`](twin/views.sql):
 
 ```sql
 DROP VIEW IF EXISTS v_followups;
@@ -111,11 +126,4 @@ DROP TABLE IF EXISTS call_events;
 CREATE INDEX IF NOT EXISTS idx_offers_run_load_round ON offers (run_id, load_id, round);
 ```
 
-**Views:** `v_kpi_summary` uses `fmcsa_eligible`, `otp_challenges.status`, and `offers` for rounds/opening rate; `v_followups` queues booking/OTP/system failures.
-
-## Key decisions
-
-- Workflow owns Twin writes; bridge is stateless and has no DB credentials.
-- Version 4: **6 tools** (`verify_carrier`, `search_loads`, `send_otp`, `verify_otp`, `negotiate`, `book_load`); accept via `negotiate` + `action: "accept"`.
-- FMCSA: authority **A** required; insurance not gated in bridge yet.
-- Logging: one outcome line per request; redact secrets and ceiling fields.
+Version 4 keeps `calls.notes` and `calls.ended_at` (written post-call by `generate_call_notes` and `write_call_notes`).

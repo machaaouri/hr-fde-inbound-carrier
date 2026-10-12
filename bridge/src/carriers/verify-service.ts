@@ -1,4 +1,3 @@
-import type { BridgeConfig } from "../config/config.ts";
 import { validationError } from "../http/errors.ts";
 import {
   evaluateCarrierEligibility,
@@ -23,13 +22,4 @@ export async function verifyCarrierByMc(
   }
 
   return evaluateCarrierEligibility(lookup.carrier, lookup.authorityRows);
-}
-
-export async function verifyCarrierFromConfig(
-  config: BridgeConfig,
-  mcNumber: string,
-  client?: FmcsaClient,
-): Promise<VerifyCarrierResult> {
-  const fmcsa = client ?? FmcsaClient.fromConfig(config);
-  return verifyCarrierByMc(fmcsa, mcNumber);
 }

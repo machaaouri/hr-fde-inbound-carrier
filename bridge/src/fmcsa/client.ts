@@ -90,27 +90,6 @@ export function readCarrierAuthorityRows(body: unknown): Record<string, unknown>
   return rows;
 }
 
-/** Legacy helper: uppercase status tokens from authority payloads. */
-export function readAuthorityStatuses(body: unknown): string[] {
-  const statuses: string[] = [];
-  const pushStatus = (value: unknown): void => {
-    if (typeof value === "string" && value.trim() !== "") {
-      statuses.push(value.trim().toUpperCase());
-    }
-  };
-
-  for (const row of readCarrierAuthorityRows(body)) {
-    pushStatus(row.authorityStatus);
-    pushStatus(row.status);
-    pushStatus(row.commonAuthorityStatus);
-    pushStatus(row.contractAuthorityStatus);
-    pushStatus(row.brokerAuthorityStatus);
-  }
-
-  return statuses;
-}
-
-
 export type FmcsaClientOptions = {
   webKey: string;
   fetchImpl?: typeof fetch;

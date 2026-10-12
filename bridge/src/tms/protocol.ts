@@ -1,14 +1,11 @@
 import { BridgeError } from "../http/errors.ts";
 import type {
-  EchoResponse,
   LoadQueryFilters,
   ParsedTmsResponse,
   TmsCommand,
   TmsWireError,
 } from "./types.ts";
 
-
-/* --- constants.ts --- */
 /** D4 — TMS client deadlines (ms). */
 export const TMS_CONNECT_MS = 800;
 export const TMS_RESPONSE_MS = 2_500;
@@ -16,7 +13,6 @@ export const TMS_READ_MAX_ATTEMPTS = 2;
 export const TMS_READ_BACKOFF_MS = 200;
 export const TMS_MAX_FRAME_BYTES = 4096;
 
-/* --- validate-value.ts --- */
 /** Handbook: values must not contain `|` or CRLF. */
 export function assertTmsFieldValue(value: string, field: string): void {
   if (value.includes("|") || value.includes("\r") || value.includes("\n")) {
@@ -29,7 +25,6 @@ export function assertTmsFieldValue(value: string, field: string): void {
   }
 }
 
-/* --- encode-request.ts --- */
 /**
  * Single-line TMS request. CMD first, AUTH second, then extra fields (handbook order).
  */
@@ -50,7 +45,6 @@ export function encodeTmsRequest(
   return `${segments.join("|")}\r\n`;
 }
 
-/* --- fields.ts --- */
 /**
  * TMS wire field names (handbook / spec). Use these instead of string literals
  * when reading or writing record maps and request bodies.
@@ -96,51 +90,6 @@ export const TMS_LOAD_STATUS = {
   BOOKED: "BOOKED",
 } as const;
 
-/** Fields emitted on LOAD_QUERY result rows. */
-export const TMS_QUERY_SUMMARY_FIELDS = [
-  TMS_FIELD.LOAD_ID,
-  TMS_FIELD.ORIG_CITY,
-  TMS_FIELD.ORIG_STATE,
-  TMS_FIELD.ORIG_ZIP,
-  TMS_FIELD.DEST_CITY,
-  TMS_FIELD.DEST_STATE,
-  TMS_FIELD.DEST_ZIP,
-  TMS_FIELD.PICKUP_DT,
-  TMS_FIELD.EQTYPE,
-  TMS_FIELD.RATE,
-  TMS_FIELD.MILES,
-  TMS_FIELD.STATUS,
-] as const satisfies readonly TmsFieldKey[];
-
-/** Field order for fake / test LOAD_GET lines (handbook-shaped). */
-export const TMS_FULL_LOAD_FIELD_ORDER = [
-  TMS_FIELD.LOAD_ID,
-  TMS_FIELD.ORIG_CITY,
-  TMS_FIELD.ORIG_STATE,
-  TMS_FIELD.ORIG_ZIP,
-  TMS_FIELD.DEST_CITY,
-  TMS_FIELD.DEST_STATE,
-  TMS_FIELD.DEST_ZIP,
-  TMS_FIELD.PICKUP_DT,
-  TMS_FIELD.DELIVERY_DT,
-  TMS_FIELD.EQTYPE,
-  TMS_FIELD.RATE,
-  TMS_FIELD.WEIGHT,
-  TMS_FIELD.COMMODITY,
-  TMS_FIELD.PIECES,
-  TMS_FIELD.MILES,
-  TMS_FIELD.DIMS,
-  TMS_FIELD.NOTES,
-  TMS_FIELD.STATUS,
-  TMS_FIELD.MAX_BUY,
-] as const satisfies readonly TmsFieldKey[];
-
-/* --- commands.ts --- */
-/** Handbook: /spec/debug-echo/ — echo body is MSG, not PAYLOAD. */
-export function encodeDebugEcho(auth: string, msg: string): string {
-  return encodeTmsRequest("DEBUG_ECHO", auth, { [TMS_FIELD.MSG]: msg });
-}
-
 export function encodeLoadQuery(
   auth: string,
   filters: LoadQueryFilters,
@@ -176,7 +125,6 @@ export function encodeLoadBook(
   });
 }
 
-/* --- parser.ts --- */
 export function parseRecordLine(line: string): Map<string, string> {
   const map = new Map<string, string>();
   for (const segment of line.split("|")) {
@@ -239,43 +187,6 @@ export function parseTmsResponse(lines: string[]): ParsedTmsResponse {
   return { kind: "success", records };
 }
 
-/* --- parse-echo.ts --- */
-/** Parse the single `ECHO|...` success line from DEBUG_ECHO. */
-export function parseDebugEchoLine(line: string): EchoResponse {
-  if (!line.startsWith("ECHO|")) {
-    return { auth_ok: false, msg: null, fields_parsed: null };
-  }
-
-  const parts = line.split("|");
-  let auth_ok = false;
-  let msg: string | null = null;
-  let fields_parsed: number | null = null;
-
-  for (const part of parts) {
-    const idx = part.indexOf(":");
-    if (idx === -1) continue;
-    const key = part.slice(0, idx);
-    const value = part.slice(idx + 1);
-    if (key === "AUTH") auth_ok = value === "OK";
-    if (key === "MSG") msg = value;
-    if (key === "FIELDS_PARSED") {
-      const n = Number.parseInt(value, 10);
-      fields_parsed = Number.isNaN(n) ? null : n;
-    }
-  }
-
-  return { auth_ok, msg, fields_parsed };
-}
-
-export function debugEchoMatchesRequest(
-  line: string,
-  expectedMsg: string,
-): boolean {
-  const parsed = parseDebugEchoLine(line);
-  return parsed.auth_ok && parsed.msg === expectedMsg;
-}
-
-/* --- map-wire-error.ts --- */
 export function bridgeErrorFromTmsWire(code: string, message: string): BridgeError {
   switch (code) {
     case "UNKNOWN_LOAD":
@@ -295,7 +206,6 @@ export function bridgeErrorFromTmsWire(code: string, message: string): BridgeErr
   }
 }
 
-/* --- fetch-load-record.ts --- */
 type TmsReadClient = {
   executeRead(requestLine: string, label: string): Promise<ParsedTmsResponse>;
 };

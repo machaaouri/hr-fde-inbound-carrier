@@ -13,7 +13,7 @@ Web call → HappyRobot workflow (voice agent + tools) ──► Twin (Postgres)
                          │
                          └── HTTPS + Bearer ──► Bridge (TypeScript, Cloud Run, US region)
                                                    ├── FMCSA API (HTTPS)
-                                                   └── Legacy TMS (TCP, fixed-width)
+                                                   └── Legacy TMS (TCP, `KEY:VALUE|` frames)
 ```
 
 | Component | Role |

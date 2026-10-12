@@ -6,8 +6,6 @@ info:
     Stateless integration layer for HappyRobot inbound carrier sales.
     v0.2 adds OTP routes (bridge crypto; Twin writes stay in the workflow).
 
-    Behavior is stubbed on HTTP routes until each build step wires real handlers.
-
     Auth: Bearer token on all routes except `/health`.
     Correlation: optional `X-HR-Run-Id` header (logged, not echoed in responses).
 

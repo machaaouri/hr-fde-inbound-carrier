@@ -1,8 +1,41 @@
-import {
-  TMS_FULL_LOAD_FIELD_ORDER,
-  TMS_QUERY_SUMMARY_FIELDS,
-} from "../../src/tms/protocol.ts";
-import { parseRecordLine } from "../../src/tms/protocol.ts";
+import { parseRecordLine, TMS_FIELD } from "../../src/tms/protocol.ts";
+
+const QUERY_SUMMARY_FIELDS = [
+  TMS_FIELD.LOAD_ID,
+  TMS_FIELD.ORIG_CITY,
+  TMS_FIELD.ORIG_STATE,
+  TMS_FIELD.ORIG_ZIP,
+  TMS_FIELD.DEST_CITY,
+  TMS_FIELD.DEST_STATE,
+  TMS_FIELD.DEST_ZIP,
+  TMS_FIELD.PICKUP_DT,
+  TMS_FIELD.EQTYPE,
+  TMS_FIELD.RATE,
+  TMS_FIELD.MILES,
+  TMS_FIELD.STATUS,
+] as const;
+
+const FULL_LOAD_FIELD_ORDER = [
+  TMS_FIELD.LOAD_ID,
+  TMS_FIELD.ORIG_CITY,
+  TMS_FIELD.ORIG_STATE,
+  TMS_FIELD.ORIG_ZIP,
+  TMS_FIELD.DEST_CITY,
+  TMS_FIELD.DEST_STATE,
+  TMS_FIELD.DEST_ZIP,
+  TMS_FIELD.PICKUP_DT,
+  TMS_FIELD.DELIVERY_DT,
+  TMS_FIELD.EQTYPE,
+  TMS_FIELD.RATE,
+  TMS_FIELD.WEIGHT,
+  TMS_FIELD.COMMODITY,
+  TMS_FIELD.PIECES,
+  TMS_FIELD.MILES,
+  TMS_FIELD.DIMS,
+  TMS_FIELD.NOTES,
+  TMS_FIELD.STATUS,
+  TMS_FIELD.MAX_BUY,
+] as const;
 
 /** Full LOAD_GET lines (handbook-shaped). MAX_BUY present on first load for ceiling tests later. */
 const FULL_LOAD_LINES = [
@@ -24,14 +57,14 @@ export function defaultFakeLoads(): FakeLoadRecord[] {
 
 /** QUERY summary line (subset of fields). */
 export function toQueryLine(record: FakeLoadRecord): string {
-  return TMS_QUERY_SUMMARY_FIELDS.map((k) => `${k}:${record.get(k) ?? ""}`).join(
+  return QUERY_SUMMARY_FIELDS.map((k) => `${k}:${record.get(k) ?? ""}`).join(
     "|",
   );
 }
 
 export function toFullLine(record: FakeLoadRecord): string {
   const parts: string[] = [];
-  for (const key of TMS_FULL_LOAD_FIELD_ORDER) {
+  for (const key of FULL_LOAD_FIELD_ORDER) {
     const value = record.get(key);
     if (value !== undefined) {
       parts.push(`${key}:${value}`);

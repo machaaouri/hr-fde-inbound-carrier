@@ -42,7 +42,7 @@ export function loadConfig(): BridgeConfig {
 
   if (parsed.data.APP_ENV === "production") {
     throw new Error(
-      "APP_ENV=production is not supported until the bridge is fully implemented (step 7). Use development for stub mode.",
+      "APP_ENV=production is not supported; use development or staging.",
     );
   }
 
