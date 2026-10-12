@@ -13,7 +13,7 @@ Web call → HappyRobot workflow (voice agent + tools) ──► Twin (Postgres)
                          │
                          └── HTTPS + Bearer ──► Bridge (TypeScript, Cloud Run, US region)
                                                    ├── FMCSA API (HTTPS)
-                                                   └── Legacy TMS (TCP, `KEY:VALUE|` frames)
+                                                   └── TMS (TCP, `KEY:VALUE|` frames)
 ```
 
 | Component | Role |
@@ -103,7 +103,7 @@ Negotiation policy lives in `bridge/src/offers/policy.ts` (opening at posted rat
 
 ## Twin upgrade SQL
 
-For Twin databases created before Version 3 slim `calls`, run once (backup first), then re-run [`twin/views.sql`](twin/views.sql):
+For Twin databases created by an earlier version of the schema, run once (backup first), then re-run [`twin/views.sql`](twin/views.sql):
 
 ```sql
 DROP VIEW IF EXISTS v_followups;
