@@ -15,7 +15,7 @@ The bridge is **stateless**. HappyRobot reads Twin, POSTs negotiation context, a
 
 Per **`load_id`** in history: **`max round`** = highest `round` value (duplicate rounds do not inflate); **latest broker quote** = last non-null `broker_offer` in array order. Rows for other loads are ignored.
 
-**Accept:** no price in the request — the bridge accepts the **latest `broker_offer`** for `load_id` in history (must be ≤ ceiling). No broker offer → **`NO_OFFER`**.
+**Accept:** no price in the request. If history already has an **`ACCEPT`** row for this load, the call is **idempotent** (same `agreed_rate`, empty `calls`, no new `offer`). Otherwise the bridge accepts the **latest `broker_offer`** (must be ≤ ceiling). No quotable offer → **`NO_OFFER`**. Every new **`ACCEPT`** `offer` row stores the agreed price in **`broker_offer`**.
 
 Unknown extra JSON keys are ignored.
 

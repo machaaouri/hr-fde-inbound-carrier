@@ -16,7 +16,10 @@ import { isBookableLoad } from "../loads/tms-record.ts";
 import { fetchLoadRecord } from "../tms/fetch-load-record.ts";
 import { parseLoadPricingFromRecord } from "./load-pricing.ts";
 import { parseCarrierCounterRaw } from "./parse-carrier-counter.ts";
-import { sameNegotiationLoad } from "../twin/workflow-fields.ts";
+import {
+  agreedRateFromAcceptHistory,
+  sameNegotiationLoad,
+} from "../twin/workflow-fields.ts";
 
 function sameLoad(req: DecideWorkflowRequest): boolean {
   return sameNegotiationLoad(req.load_id, req.current_load_id);
@@ -88,11 +91,30 @@ function gateNoOffer(req: DecideWorkflowRequest): DecideWorkflowResponse {
   });
 }
 
+function idempotentAcceptResponse(
+  req: DecideWorkflowRequest,
+  agreed: number,
+): DecideWorkflowResponse {
+  return buildDecideWorkflowResponse({
+    decision: "ACCEPT",
+    broker_offer: null,
+    agreed_rate: agreed,
+    rounds_remaining: roundsRemainingFromUsed(req.max_round),
+    offer: null,
+    calls: {},
+  });
+}
+
 async function handleAccept(
   client: TmsClient,
   config: BridgeConfig,
   req: DecideWorkflowRequest,
 ): Promise<DecideWorkflowResponse> {
+  const priorAgreed = agreedRateFromAcceptHistory(req.load_id, req.offers_history);
+  if (priorAgreed !== null) {
+    return idempotentAcceptResponse(req, priorAgreed);
+  }
+
   const price = req.latest_broker_offer;
   if (price === null) {
     return gateNoOffer(req);
@@ -126,7 +148,7 @@ async function handleAccept(
       load_id: req.load_id,
       round: req.max_round,
       carrier_counter: null,
-      broker_offer: null,
+      broker_offer: price,
       decision: "ACCEPT",
     },
     calls,
@@ -266,7 +288,7 @@ async function handleNegotiateCounter(
         load_id: req.load_id,
         round: effectiveRound,
         carrier_counter: counterDollars,
-        broker_offer: null,
+        broker_offer: agreed,
         decision: "ACCEPT",
       },
       calls: {

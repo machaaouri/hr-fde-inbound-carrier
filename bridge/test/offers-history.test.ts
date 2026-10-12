@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { deriveNegotiationFromHistory } from "../src/twin/workflow-fields.ts";
+import {
+  agreedRateFromAcceptHistory,
+  deriveNegotiationFromHistory,
+} from "../src/twin/workflow-fields.ts";
 import type { OfferHistoryRow } from "../src/twin/workflow-fields.ts";
 
 const LOAD = "LD0000045821";
@@ -43,6 +46,31 @@ describe("offers_history derivation", () => {
       },
     ];
     expect(deriveNegotiationFromHistory(LOAD, rows).latest_broker_offer).toBe(1775);
+  });
+
+  it("agreedRateFromAcceptHistory prefers broker_offer then carrier_counter", () => {
+    expect(
+      agreedRateFromAcceptHistory(LOAD, [
+        {
+          load_id: LOAD,
+          round: 1,
+          carrier_counter: 850,
+          broker_offer: null,
+          decision: "ACCEPT",
+        },
+      ]),
+    ).toBe(850);
+    expect(
+      agreedRateFromAcceptHistory(LOAD, [
+        {
+          load_id: LOAD,
+          round: 1,
+          carrier_counter: 850,
+          broker_offer: 848,
+          decision: "ACCEPT",
+        },
+      ]),
+    ).toBe(848);
   });
 
   it("ignores rows for other loads", () => {

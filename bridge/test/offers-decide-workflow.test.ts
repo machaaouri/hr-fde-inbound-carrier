@@ -285,6 +285,115 @@ describe("POST /v1/offers/decide workflow contract", () => {
       agreed_rate: 1950,
       outcome: "agreed",
     });
+    expect((body.offer as { broker_offer: number }).broker_offer).toBe(1950);
+  });
+
+  it("LD00983: counter 850 accepted then action accept stays at 850", async () => {
+    const LD = "LD00983";
+    const open = await app.inject({
+      method: "POST",
+      url: "/v1/offers/decide",
+      headers: { authorization: AUTH },
+      payload: decidePayload({ load_id: LD, offers_history: [] }),
+    });
+    expect(open.statusCode).toBe(200);
+    expect(open.json().agent.broker_offer).toBe(821);
+
+    const counter = await app.inject({
+      method: "POST",
+      url: "/v1/offers/decide",
+      headers: { authorization: AUTH },
+      payload: decidePayload({
+        load_id: LD,
+        current_load_id: LD,
+        carrier_counter: "850",
+        offers_history: historyRows([
+          {
+            load_id: LD,
+            round: 0,
+            carrier_counter: null,
+            broker_offer: 821,
+            decision: "OPENING",
+          },
+        ]),
+      }),
+    });
+    expect(counter.statusCode).toBe(200);
+    const counterBody = counter.json() as {
+      agent: { decision: string; agreed_rate: number };
+      offer: { broker_offer: number; decision: string };
+    };
+    expect(counterBody.agent.decision).toBe("ACCEPT");
+    expect(counterBody.agent.agreed_rate).toBe(850);
+    expect(counterBody.offer.broker_offer).toBe(850);
+
+    const again = await app.inject({
+      method: "POST",
+      url: "/v1/offers/decide",
+      headers: { authorization: AUTH },
+      payload: decidePayload({
+        action: "accept",
+        load_id: LD,
+        current_load_id: LD,
+        offers_history: historyRows([
+          {
+            load_id: LD,
+            round: 0,
+            carrier_counter: null,
+            broker_offer: 821,
+            decision: "OPENING",
+          },
+          {
+            load_id: LD,
+            round: 1,
+            carrier_counter: 850,
+            broker_offer: null,
+            decision: "ACCEPT",
+          },
+        ]),
+      }),
+    });
+    expect(again.statusCode).toBe(200);
+    const againBody = again.json() as {
+      agent: { decision: string; agreed_rate: number };
+      calls: Record<string, unknown>;
+      offer: unknown;
+    };
+    expect(againBody.agent.decision).toBe("ACCEPT");
+    expect(againBody.agent.agreed_rate).toBe(850);
+    expect(againBody.offer).toBeNull();
+    expect(againBody.calls).toEqual({});
+  });
+
+  it("LD00983: action accept on opening history agrees at 821", async () => {
+    const LD = "LD00983";
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/offers/decide",
+      headers: { authorization: AUTH },
+      payload: decidePayload({
+        action: "accept",
+        load_id: LD,
+        current_load_id: LD,
+        offers_history: historyRows([
+          {
+            load_id: LD,
+            round: 0,
+            carrier_counter: null,
+            broker_offer: 821,
+            decision: "OPENING",
+          },
+        ]),
+      }),
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      agent: { decision: string; agreed_rate: number };
+      offer: { broker_offer: number };
+    };
+    expect(body.agent.decision).toBe("ACCEPT");
+    expect(body.agent.agreed_rate).toBe(821);
+    expect(body.offer.broker_offer).toBe(821);
   });
 
   it("accept with empty history ? NO_OFFER", async () => {

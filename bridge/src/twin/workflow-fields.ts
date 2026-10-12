@@ -133,6 +133,31 @@ export function deriveNegotiationFromHistory(
   return { max_round, latest_broker_offer };
 }
 
+function isAcceptDecision(decision: string): boolean {
+  return decision.toUpperCase() === "ACCEPT";
+}
+
+/** Agreed dollars from the latest ACCEPT row for this load (array order). */
+export function agreedRateFromAcceptHistory(
+  loadId: string,
+  rows: OfferHistoryRow[],
+): number | null {
+  let agreed: number | null = null;
+  for (const row of rows) {
+    if (row.load_id !== loadId || !isAcceptDecision(row.decision)) {
+      continue;
+    }
+    const fromBroker = row.broker_offer;
+    const fromCounter = row.carrier_counter;
+    if (fromBroker !== null) {
+      agreed = fromBroker;
+    } else if (fromCounter !== null) {
+      agreed = fromCounter;
+    }
+  }
+  return agreed;
+}
+
 export function normalizeChallengeStatus(raw: unknown): string {
   if (raw === null || raw === undefined) {
     return "";
