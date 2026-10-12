@@ -1,6 +1,6 @@
 # Inbound carrier bridge — design (current)
 
-Authoritative HTTP contract: [`bridge/openapi.yaml`](../bridge/openapi.yaml). Workflow export: [`workflow/exports/inbound-carrier-sales-version-3.json`](../workflow/exports/inbound-carrier-sales-version-3.json).
+Authoritative HTTP contract: [`bridge/openapi.yaml`](../bridge/openapi.yaml). Workflow export: [`workflow/exports/inbound-carrier-sales-version-4.json`](../workflow/exports/inbound-carrier-sales-version-4.json).
 
 ## Auth & correlation
 
@@ -78,13 +78,15 @@ Example (handbook load **LD0000045821**): loadboard $2,150, ceiling $1,950 → o
 - TCP TMS: one connection per request, `KEY:VALUE|` frames, timeouts/retries per client.
 - Errors map to `TMS_UNAVAILABLE`, `TMS_BAD_RESPONSE`, etc. — never raw TMS codes.
 
-## Twin (Version 3)
+## Twin (Version 4)
 
 **Tables:** `carrier_contacts`, `calls`, `otp_challenges`, `offers`.
 
-**`calls` columns:** `run_id`, `env`, `started_at`, `ended_at`, `mc_number`, `carrier_name`, `dot_number`, `fmcsa_eligible`, `fmcsa_reason`, `current_load_id`, `agreed_rate`, `outcome`, `booking_ref`.
+**`calls` columns:** `run_id`, `env`, `started_at`, `ended_at`, `mc_number`, `carrier_name`, `dot_number`, `fmcsa_eligible`, `fmcsa_reason`, `current_load_id`, `agreed_rate`, `outcome`, `booking_ref`, `notes`.
 
 OTP verification and negotiation rounds are **not** duplicated on `calls` (use `otp_challenges` and `offers`).
+
+**Post-call (Version 4):** after the voice session ends, workflow steps **`generate_call_notes`** (AI summary) and **`write_call_notes`** (Twin write) set **`calls.notes`** and **`calls.ended_at`**.
 
 **Upgrade from older Twin:** run once in the Twin SQL console (backup first), then re-run [`twin/views.sql`](twin/views.sql):
 
@@ -101,7 +103,6 @@ ALTER TABLE calls DROP COLUMN IF EXISTS loadboard_rate;
 ALTER TABLE calls DROP COLUMN IF EXISTS outcome_reason;
 ALTER TABLE calls DROP COLUMN IF EXISTS handoff_status;
 ALTER TABLE calls DROP COLUMN IF EXISTS summary;
-ALTER TABLE calls DROP COLUMN IF EXISTS notes;
 ALTER TABLE calls DROP COLUMN IF EXISTS run_url;
 
 DROP INDEX IF EXISTS idx_events_run;
@@ -115,6 +116,6 @@ CREATE INDEX IF NOT EXISTS idx_offers_run_load_round ON offers (run_id, load_id,
 ## Key decisions
 
 - Workflow owns Twin writes; bridge is stateless and has no DB credentials.
-- Version 3: **6 tools**; accept via `negotiate` + `action: "accept"`.
+- Version 4: **6 tools** (`verify_carrier`, `search_loads`, `send_otp`, `verify_otp`, `negotiate`, `book_load`); accept via `negotiate` + `action: "accept"`.
 - FMCSA: authority **A** required; insurance not gated in bridge yet.
 - Logging: one outcome line per request; redact secrets and ceiling fields.

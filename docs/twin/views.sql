@@ -1,4 +1,4 @@
--- KPI and follow-up views (read-only for Ops App). Version 3 columns only.
+-- KPI and follow-up views (read-only for Ops App). Version 4 columns only.
 
 CREATE OR REPLACE VIEW v_kpi_summary AS
 WITH base AS (

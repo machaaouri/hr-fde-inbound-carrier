@@ -1,4 +1,4 @@
--- Twin schema for inbound carrier sales (Version 3 workflow).
+-- Twin schema for inbound carrier sales (Version 4 workflow).
 -- Run in the HappyRobot Twin SQL console. Dollars as BIGINT whole USD. MAX_BUY is never stored.
 
 CREATE TABLE IF NOT EXISTS carrier_contacts (
@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS calls (
   current_load_id  TEXT,
   agreed_rate      BIGINT,
   outcome          TEXT NOT NULL DEFAULT 'abandoned',
-  booking_ref      TEXT
+  booking_ref      TEXT,
+  notes            TEXT
 );
 
 CREATE TABLE IF NOT EXISTS otp_challenges (
