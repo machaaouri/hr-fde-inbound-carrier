@@ -1,4 +1,8 @@
-.PHONY: install lint typecheck test docker-build dev run tunnel deploy
+.PHONY: install lint typecheck test docker-build dev run tunnel deploy list-loads
+
+# Broad TMS LOAD_QUERY (up to 10 OPEN rows). Bridge /v1/loads/search still returns max 3.
+list-loads:
+	./scripts/list-open-loads.sh
 
 install:
 	cd bridge && npm install

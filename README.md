@@ -46,6 +46,21 @@ curl -sS -X POST "$BRIDGE_BASE/v1/carriers/verify" \
   -d '{"mc_number":"136818"}'
 ```
 
+**Pick a live load id for tests** (direct TMS; needs `TMS_*` in `.env`):
+
+```bash
+make list-loads
+make list-loads LIMIT=10 EQUIPMENT=REEFER
+```
+
+Lane search via the bridge (max **3** loads, optional `origin_state` / `dest_state`):
+
+```bash
+curl -sS -X POST "$BRIDGE_BASE/v1/loads/search" \
+  -H "Authorization: Bearer $BRIDGE_API_KEY" -H "Content-Type: application/json" \
+  -d '{"equipment_type":"DRY_VAN","origin_state":"AL","dest_state":"MO"}'
+```
+
 ## Test carriers (FMCSA + OTP seed)
 
 Twin seed maps these **ACTIVE** freight MCs to the email in [`docs/twin/seed.sql`](docs/twin/seed.sql) (default inbox for E2E):
